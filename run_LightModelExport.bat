@@ -18,6 +18,11 @@ set LIST_RVT=%BASE%\Scripts\List_RVT-models.txt
 set LOG=%BASE%\Scripts\Log.log
 set RBP_RUN_LOG=%BASE%\Scripts\BatchRvt_run.log
 set DETECT_SCRIPT=%SCRIPT_DIR%detect_revit_versions.py
+set PREP_SCRIPT=%SCRIPT_DIR%prepare_revit_lists_from_config.py
+set CONFIG_JSON=%SCRIPT_DIR%..\03_Python_json\config.json
+set DOWNLOAD_LIST=%BASE%\Scripts\List_RVT-download.txt
+set PREP_LOG=%BASE%\Scripts\prepare_revit_lists.log
+set CONFIG_ENV=%BASE%\Scripts\config_env.cmd
 set LIST_BY_VER_PREFIX=%BASE%\Scripts\List_RVT-models_
 set LIST_UNKNOWN=%BASE%\Scripts\List_RVT-models_UNKNOWN.txt
 set DETECT_LOG=%BASE%\Scripts\detect_revit_versions.log
@@ -44,32 +49,46 @@ echo ВЫГРУЗКА МОДЕЛЕЙ С REVIT SERVER
 echo ================================
 
 :: Выгрузка моделей с сервера Revit
-@REM "%RST%" L "%PROJ%\AR\UB\Likino_AR_GP_R24_B1.rvt" -s %SERVER% -d "%BASE%\CDE\B1\Likino_AR_GP_R24_B1.rvt" -o
-@REM "%RST%" L "%PROJ%\AR\UB\Likino_AR_GP_R24_FSD_B1.rvt" -s %SERVER% -d "%BASE%\CDE\B1\Likino_AR_GP_R24_FSD_B1.rvt" -o
-@REM "%RST%" L "%PROJ%\ST\Likino_KR_GP_R24_B1.rvt" -s %SERVER% -d "%BASE%\CDE\B1\Likino_KR_GP_R24_B1.rvt" -o
-@REM "%RST%" L "%PROJ%\MEP\B1\Likino_EOM_GP_R24_B1.rvt" -s %SERVER% -d "%BASE%\CDE\B1\Likino_EOM_GP_R24_B1.rvt" -o
-@REM "%RST%" L "%PROJ%\MEP\B1\Likino_KV_GP_R24_B1.rvt" -s %SERVER% -d "%BASE%\CDE\B1\Likino_KV_GP_R24_B1.rvt" -o
-@REM "%RST%" L "%PROJ%\MEP\B1\Likino_OT_GP_R24_B1.rvt" -s %SERVER% -d "%BASE%\CDE\B1\Likino_OT_GP_R24_B1.rvt" -o
-@REM "%RST%" L "%PROJ%\MEP\B1\Likino_PT_GP_R24_B1.rvt" -s %SERVER% -d "%BASE%\CDE\B1\Likino_PT_GP_R24_B1.rvt" -o
-"%RST%" L "%PROJ%\MEP\B1\Likino_SS_GP_R24_B1.rvt" -s %SERVER% -d "%BASE%\CDE\B1\Likino_SS_GP_R24_B1.rvt" -o
-@REM "%RST%" L "%PROJ%\MEP\B1\Likino_VENT_GP_R24_B1.rvt" -s %SERVER% -d "%BASE%\CDE\B1\Likino_VENT_GP_R24_B1.rvt" -o
-@REM "%RST%" L "%PROJ%\MEP\B1\Likino_VKK_GP_R24_B1.rvt" -s %SERVER% -d "%BASE%\CDE\B1\Likino_VKK_GP_R24_B1.rvt" -o
-@REM "%RST%" L "%PROJ%\MEP\B1\Likino_VKV_GP_R24_B1.rvt" -s %SERVER% -d "%BASE%\CDE\B1\Likino_VKV_GP_R24_B1.rvt" -o
-@REM "%RST%" L "%PROJ%\MEP\B1\Likino_ITP_GP_R24_B1.rvt" -s %SERVER% -d "%BASE%\CDE\B1\Likino_ITP_GP_R24_B1.rvt" -o
+if not exist "%CONFIG_JSON%" (
+  echo ERROR: config not found: "%CONFIG_JSON%"
+  goto :fail
+)
+if not exist "%PREP_SCRIPT%" (
+  echo ERROR: prepare script not found: "%PREP_SCRIPT%"
+  goto :fail
+)
 
-echo ================================
-echo СОЗДАНИЕ СПИСКА МОДЕЛЕЙ ДЛЯ ОЧИСТКИ
-echo ================================
+echo Preparing model lists from config...
+python "%PREP_SCRIPT%" --config "%CONFIG_JSON%" --download_folder "%BASE%\CDE\B1" --list "%LIST_RVT%" --download_list "%DOWNLOAD_LIST%" --env "%CONFIG_ENV%" > "%PREP_LOG%" 2>&1
+type "%PREP_LOG%"
 
-:: Получаем список выгруженных RVT (без ревизий и служебных файлов)
-dir /b/s "%BASE%\CDE\B1\*.rvt" | findstr /i /v /r /c:"[.][0-9][0-9][0-9][0-9][.]" > "%LIST_RVT%"
+if not exist "%CONFIG_ENV%" (
+  echo ERROR: config env not created: "%CONFIG_ENV%"
+  goto :fail
+)
+call "%CONFIG_ENV%"
+set CLEAN_CONFIG=%CONFIG_JSON%
+if not defined RS_HOST set "RS_HOST=%SERVER%"
+
+if not exist "%DOWNLOAD_LIST%" (
+  echo ERROR: download list not found: "%DOWNLOAD_LIST%"
+  goto :fail
+)
+
+for /f "usebackq tokens=1,2 delims=|" %%A in ("%DOWNLOAD_LIST%") do (
+  if "%%~A"=="" (
+    rem skip empty line
+  ) else (
+    for %%D in ("%%B") do if not exist "%%~dpD" md "%%~dpD"
+    "%RST%" L "%%A" -s !RS_HOST! -d "%%B" -o
+  )
+)
 
 for %%A in ("%LIST_RVT%") do if %%~zA==0 (
   echo ERROR: file list is empty: "%LIST_RVT%"
   goto :fail
 )
 
-echo ================================
 echo ОЧИСТКА МОДЕЛЕЙ (PURGE/AUDIT)
 echo ================================
 

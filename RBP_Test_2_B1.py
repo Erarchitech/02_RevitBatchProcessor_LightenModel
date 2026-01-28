@@ -2,12 +2,16 @@
 
 import clr
 import System
+import os
+import json
 clr.AddReference("System.Core")
 clr.ImportExtensions(System.Linq)
 
 clr.AddReference("RevitAPI")
 clr.AddReference("RevitAPIUI")
 from Autodesk.Revit.DB import *
+from System.Collections.Generic import List
+from System import Guid
 
 import revit_script_util
 from revit_script_util import Output
@@ -19,9 +23,35 @@ revitFilePath = revit_script_util.GetRevitFilePath()
 sessionDataFolderPath = revit_script_util.GetSessionDataFolderPath()
 dataExportFolderPath = revit_script_util.GetDataExportFolderPath()
 
+# Optional JSON config path supplied by the batch file.
+CONFIG_PATH = System.Environment.GetEnvironmentVariable("CLEAN_CONFIG")
+CONFIG = {}
+if CONFIG_PATH and System.IO.File.Exists(CONFIG_PATH):
+    try:
+        CONFIG = json.loads(System.IO.File.ReadAllText(CONFIG_PATH))
+        Output("CONFIG: {0}".format(CONFIG_PATH))
+    except Exception as e:
+        Output("CONFIG load failed: {0}".format(e))
+
+# Feature toggles (defaults).
+PURGE_UNUSED = True
+DELETE_SHEETS = True
+DELETE_IMPORTS = True
+DELETE_LINKS = True
+COMPACT_ON_SAVE = True
+
+if CONFIG:
+    PURGE_UNUSED = bool(CONFIG.get("purge_unused", PURGE_UNUSED))
+    DELETE_SHEETS = bool(CONFIG.get("delete_sheets", DELETE_SHEETS))
+    DELETE_IMPORTS = bool(CONFIG.get("delete_imports", DELETE_IMPORTS))
+    DELETE_LINKS = bool(CONFIG.get("delete_links", DELETE_LINKS))
+    COMPACT_ON_SAVE = bool(CONFIG.get("compact_on_save", COMPACT_ON_SAVE))
+
 # Define a target folder for the saved model.
 # Leave empty to fall back to BatchRvt paths or the source file directory.
 CUSTOM_OUTPUT_FOLDER = System.Environment.GetEnvironmentVariable("RBP_OUTPUT")
+if (not CUSTOM_OUTPUT_FOLDER or not CUSTOM_OUTPUT_FOLDER.strip()) and CONFIG.get("output_folder"):
+    CUSTOM_OUTPUT_FOLDER = CONFIG.get("output_folder")
 if CUSTOM_OUTPUT_FOLDER and CUSTOM_OUTPUT_FOLDER.strip():
     Output("CUSTOM_OUTPUT_FOLDER: {0}".format(CUSTOM_OUTPUT_FOLDER))
 TYPE_PURGE_RULES = [
@@ -41,6 +71,41 @@ def _is_valid(element):
         return element is not None and element.IsValidObject
     except:
         return False
+
+
+def _get_class(name):
+    return globals().get(name, None)
+
+
+def _count_collection(items):
+    if items is None:
+        return 0
+    try:
+        return items.Count
+    except:
+        try:
+            return len(items)
+        except:
+            return 0
+
+
+def _delete_by_class(doc, class_name, label):
+    cls = _get_class(class_name)
+    if cls is None:
+        return 0
+    deleted = 0
+    elems = list(FilteredElementCollector(doc).OfClass(cls))
+    for elem in elems:
+        if not _is_valid(elem):
+            continue
+        try:
+            doc.Delete(elem.Id)
+            deleted += 1
+        except:
+            pass
+    if deleted > 0:
+        Output("Removed {0}: {1}".format(label, deleted))
+    return deleted
 
 def _get_target_folder():
     if CUSTOM_OUTPUT_FOLDER and CUSTOM_OUTPUT_FOLDER.strip():
@@ -79,6 +144,7 @@ def _save_as_central(target_path):
     save_opts = SaveAsOptions()
     save_opts.OverwriteExistingFile = True
     save_opts.MaximumBackups = 1
+    save_opts.Compact = COMPACT_ON_SAVE
 
     if doc.IsWorkshared:
         ws_opts = WorksharingSaveAsOptions()
@@ -94,44 +160,22 @@ def _save_as_central(target_path):
     doc.SaveAs(target_path, save_opts)
 
 def delete_revit_links(doc):
-    collector = FilteredElementCollector(doc).OfClass(RevitLinkType)
-    links = list(collector)
-    count = 0
-    for lt in links:
-        if not _is_valid(lt):
-            continue
-        try:
-            doc.Delete(lt.Id)
-            count += 1
-        except:
-            pass
-    Output("Removed Revit links: {0}".format(count))
+    deleted = 0
+    deleted += _delete_by_class(doc, "RevitLinkInstance", "Revit link instances")
+    deleted += _delete_by_class(doc, "RevitLinkType", "Revit link types")
+    deleted += _delete_by_class(doc, "CoordinationModel", "Coordination models")
+    deleted += _delete_by_class(doc, "PointCloudInstance", "Point clouds")
+    deleted += _delete_by_class(doc, "PointCloudType", "Point cloud types")
+    deleted += _delete_by_class(doc, "ImageType", "Raster images")
+    deleted += _delete_by_class(doc, "DecalType", "Decals")
+    if deleted == 0:
+        Output("Removed Revit links: 0")
 
 
 def delete_imported_content(doc):
     deleted = 0
-    imports = list(FilteredElementCollector(doc).OfClass(ImportInstance))
-    for inst in imports:
-        if not _is_valid(inst):
-            continue
-        try:
-            doc.Delete(inst.Id)
-            deleted += 1
-        except:
-            pass
-
-    cad_types = list(FilteredElementCollector(doc).OfClass(CADLinkType))
-    for cad in cad_types:
-        if not _is_valid(cad):
-            continue
-        try:
-            doc.Delete(cad.Id)
-            deleted += 1
-        except:
-            pass
-
-    if deleted > 0:
-        Output("Removed imported CAD content: {0}".format(deleted))
+    deleted += _delete_by_class(doc, "ImportInstance", "Imported CAD instances")
+    deleted += _delete_by_class(doc, "CADLinkType", "CAD link types")
     return deleted
 
 def delete_sheets(doc):
@@ -275,25 +319,87 @@ def _purge_unused_general_types(doc):
     return deleted
 
 
-def purge_unused_families(doc):
+def _purge_unused_via_performance_adviser(doc):
+    purge_guid = Guid("e8c63650-70b7-435a-9010-ec97660c1bda")
+    rule_id = None
+    for rule in PerformanceAdviser.GetPerformanceAdviser().GetAllRuleIds():
+        if rule.Guid.Equals(purge_guid):
+            rule_id = rule
+            break
+
+    if rule_id is None:
+        Output("Purge rule not found; falling back to manual purge.")
+        return None
+
     total_deleted = 0
     max_passes = 10
+    for pass_index in range(1, max_passes + 1):
+        try:
+            rule_ids = List[PerformanceAdviserRuleId]()
+            rule_ids.Add(rule_id)
+            failure_messages = PerformanceAdviser.GetPerformanceAdviser().ExecuteRules(doc, rule_ids)
+            if failure_messages is None or failure_messages.Count == 0:
+                break
+            purgeable_ids = failure_messages[0].GetFailingElements()
+            if purgeable_ids is None or purgeable_ids.Count == 0:
+                break
+            t = Transaction(doc, "Purge unused elements")
+            try:
+                t.Start()
+                deleted_ids = doc.Delete(purgeable_ids)
+                t.Commit()
+            except Exception as ex:
+                if t.HasStarted():
+                    t.RollBack()
+                Output("PurgeUnused (PerformanceAdviser) failed: {0}".format(ex))
+                break
+            removed_count = _count_collection(deleted_ids)
+            total_deleted += removed_count
+            if removed_count == 0:
+                break
+        except Exception as ex:
+            Output("PurgeUnused (PerformanceAdviser) failed: {0}".format(ex))
+            break
 
+    Output("Purge via PerformanceAdviser removed: {0}".format(total_deleted))
+    return total_deleted
+
+
+def _purge_unused_manual(doc):
+    total_deleted = 0
+    max_passes = 10
     for pass_index in range(1, max_passes + 1):
         deleted_this_pass = 0
-        deleted_this_pass += _purge_unused_family_symbols(doc)
-        deleted_this_pass += _purge_unused_general_types(doc)
-        for label, type_class, bic in TYPE_PURGE_RULES:
-            deleted_this_pass += _purge_unused_types_for_category(doc, label, type_class, bic)
-        deleted_this_pass += _purge_unused_materials(doc)
+        t = Transaction(doc, "Purge unused elements (manual)")
+        try:
+            t.Start()
+            deleted_this_pass += _purge_unused_family_symbols(doc)
+            deleted_this_pass += _purge_unused_general_types(doc)
+            for label, type_class, bic in TYPE_PURGE_RULES:
+                deleted_this_pass += _purge_unused_types_for_category(doc, label, type_class, bic)
+            deleted_this_pass += _purge_unused_materials(doc)
+            t.Commit()
+        except Exception as ex:
+            if t.HasStarted():
+                t.RollBack()
+            Output("Manual purge failed: {0}".format(ex))
+            break
 
         if deleted_this_pass == 0:
             Output("Unused elements purge finished. Total removed: {0} in {1} passes.".format(total_deleted, pass_index if total_deleted > 0 else 1))
-            return
+            return total_deleted
 
         total_deleted += deleted_this_pass
 
     Output("Unused elements purge finished. Total removed: {0} in {1} passes (max reached).".format(total_deleted, max_passes))
+    return total_deleted
+
+
+def purge_unused_families(doc):
+    result = _purge_unused_via_performance_adviser(doc)
+    if result is None:
+        return _purge_unused_manual(doc)
+    return result
 
 
 def main():
@@ -305,18 +411,24 @@ def main():
 
         Output("Current file: {0}".format(revitFilePath))
 
-        t = Transaction(doc, "Model cleanup")
-        try:
-            t.Start()
-            delete_revit_links(doc)
-            delete_imported_content(doc)
-            delete_sheets(doc)
+        if DELETE_LINKS or DELETE_IMPORTS or DELETE_SHEETS:
+            t = Transaction(doc, "Remove links/imports/sheets")
+            try:
+                t.Start()
+                if DELETE_LINKS:
+                    delete_revit_links(doc)
+                if DELETE_IMPORTS:
+                    delete_imported_content(doc)
+                if DELETE_SHEETS:
+                    delete_sheets(doc)
+                t.Commit()
+            except Exception:
+                if t.HasStarted():
+                    t.RollBack()
+                raise
+
+        if PURGE_UNUSED:
             purge_unused_families(doc)
-            t.Commit()
-        except Exception:
-            if t.HasStarted():
-                t.RollBack()
-            raise
 
         target_folder = _get_target_folder()
         _ensure_directory(target_folder)

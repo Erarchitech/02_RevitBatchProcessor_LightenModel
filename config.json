@@ -1,0 +1,19 @@
+{
+  "RS_HOST": "10.0.2.24",
+  "RS_VER": "2024",
+  "source_folder": "|",
+  "download_folder": "Y:\\Likino\\CDE\\B1",
+  "output_folder": "Y:\\Likino\\CDE\\B1_CLEANED",
+  "log_folder": "Y:\\Likino\\CDE\\logs",
+  "revit_version": "2024",
+  "purge_unused": true,
+  "delete_sheets": true,
+  "delete_imports": true,
+  "delete_links": true,
+  "compact_on_save": true,
+  "models": [
+    "Likino_AR_GP_R24_B1.rvt",
+    "Likino_EOM_GP_R24_B1.rvt",
+    "Likino_KR_GP_R24_B1.rvt"
+  ]
+}
