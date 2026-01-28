@@ -6,12 +6,12 @@
   "log_folder": "G:/Мой диск/02_DEV/06_Projects/01_Облегченные модели/02_XML_RevitBatchProcessor/PROJECT/log",
   "revit_version": "2024",
   "purge_unused": true,
-  "delete_sheets": false,
+  "delete_sheets": true,
   "delete_imports": true,
   "delete_links": true,
   "compact_on_save": true,
   "models": [
-    "Likino_KV_GP_R24_B3.rvt",
-    "Likino_SS_GP_R24_B3.rvt"
+    "Likino_SS_GP_R24_B3.rvt",
+    "Likino_KV_GP_R24_B3.rvt"
   ]
 }

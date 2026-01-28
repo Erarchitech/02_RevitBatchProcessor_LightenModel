@@ -332,7 +332,7 @@ def _purge_unused_via_performance_adviser(doc):
         return None
 
     total_deleted = 0
-    max_passes = 10
+    max_passes = 20
     for pass_index in range(1, max_passes + 1):
         try:
             rule_ids = List[PerformanceAdviserRuleId]()
@@ -367,7 +367,7 @@ def _purge_unused_via_performance_adviser(doc):
 
 def _purge_unused_manual(doc):
     total_deleted = 0
-    max_passes = 10
+    max_passes = 20
     for pass_index in range(1, max_passes + 1):
         deleted_this_pass = 0
         t = Transaction(doc, "Purge unused elements (manual)")

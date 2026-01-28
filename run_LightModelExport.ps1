@@ -96,7 +96,7 @@ if ($rsnPaths.Count -eq 0) {
 
 $rst = "C:\Program Files\Autodesk\Revit 2024\RevitServerToolCommand\RevitServerTool.exe"
 $rbp = "$env:LOCALAPPDATA\RevitBatchProcessor\BatchRvt.exe"
-$taskScript = Join-Path -Path (Split-Path -Parent $MyInvocation.MyCommand.Path) -ChildPath "RBP_Test_2_B1.py"
+$taskScript = Join-Path -Path (Split-Path -Parent $MyInvocation.MyCommand.Path) -ChildPath "clean_model.py"
 $logFolder = Join-Path -Path (Split-Path -Parent $MyInvocation.MyCommand.Path) -ChildPath "PROJECT\Scripts\BatchRvtLogs"
 $rbpRunLog = Join-Path -Path (Split-Path -Parent $MyInvocation.MyCommand.Path) -ChildPath ("PROJECT\Scripts\BatchRvt_run_{0}.log" -f $revitVersion)
 
