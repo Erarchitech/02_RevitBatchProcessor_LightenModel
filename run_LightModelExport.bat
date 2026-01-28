@@ -19,9 +19,7 @@ set ADDIN_VERSION=2024
 
 
 echo ================================
-
-echo ???????? ??????? ? REVIT SERVER
-
+echo ВЫГРУЗКА МОДЕЛЕЙ С REVIT SERVER
 echo ================================
 
 
@@ -44,7 +42,11 @@ if not exist "%RUN_PS%" (
 
 
 
-for /f "usebackq delims=" %%V in (`"%PS_EXE%" -NoProfile -Command "(Get-Content -Raw -LiteralPath '%CONFIG_JSON%' | ConvertFrom-Json).revit_version"`) do set "ADDIN_VERSION=%%V"
+set "RVT_VER_FILE=%TEMP%\\revit_version.txt"
+if exist "%RVT_VER_FILE%" del "%RVT_VER_FILE%" >nul 2>nul
+%PS_EXE% -NoProfile -Command "(Get-Content -Raw -LiteralPath '%CONFIG_JSON%' | ConvertFrom-Json).revit_version" > "%RVT_VER_FILE%"
+set /p ADDIN_VERSION=<"%RVT_VER_FILE%"
+del "%RVT_VER_FILE%" >nul 2>nul
 if not defined ADDIN_VERSION (
   echo ERROR: revit_version not found in config.json
   goto :fail
@@ -72,7 +74,9 @@ if errorlevel 1 (
   goto :fail
 )
 
-echo Running PowerShell pipeline...
+echo ОЧИСТКА МОДЕЛЕЙ
+echo ================================
+
 "%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%RUN_PS%" -ConfigPath "%CONFIG_JSON%"
 
 
@@ -94,9 +98,7 @@ timeout /t 3 /nobreak >nul
 call "%ENABLE_ADDINS%" "%ADDIN_VERSION%"
 
 echo ================================
-
-echo ??????
-
+echo ЗАВЕРШЕНО
 echo ================================
 
 pause
