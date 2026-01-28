@@ -31,6 +31,9 @@ set RBP_LOG_FOLDER=%BASE%\Scripts\BatchRvtLogs
 set RBP_OUTPUT=%BASE%\CLEANED
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
+set PYTHON_EXE=py -3
+%PYTHON_EXE% -c "print(1)" >nul 2>nul
+if errorlevel 1 set PYTHON_EXE=python
 set ADDIN_VERSIONS=2020 2022 2024
 set ADDIN_BUNDLE_DIRS=%ProgramData%\Autodesk\ApplicationPlugins %AppData%\Autodesk\ApplicationPlugins
 set SKIP_BUNDLES=
@@ -59,7 +62,7 @@ if not exist "%PREP_SCRIPT%" (
 )
 
 echo Preparing model lists from config...
-python "%PREP_SCRIPT%" --config "%CONFIG_JSON%" --download_folder "%BASE%\CDE\B1" --list "%LIST_RVT%" --download_list "%DOWNLOAD_LIST%" --env "%CONFIG_ENV%" > "%PREP_LOG%" 2>&1
+%PYTHON_EXE% "%PREP_SCRIPT%" --config "%CONFIG_JSON%" --download_folder "%BASE%\CDE\B1" --list "%LIST_RVT%" --download_list "%DOWNLOAD_LIST%" --env "%CONFIG_ENV%" > "%PREP_LOG%" 2>&1
 type "%PREP_LOG%"
 
 if not exist "%CONFIG_ENV%" (
@@ -107,7 +110,7 @@ if not exist "%DETECT_SCRIPT%" (
 )
 
 echo Detecting Revit versions...
-python "%DETECT_SCRIPT%" --list "%LIST_RVT%" --out_prefix "%LIST_BY_VER_PREFIX%" --years %ADDIN_VERSIONS% --unknown "%LIST_UNKNOWN%" > "%DETECT_LOG%" 2>&1
+%PYTHON_EXE% "%DETECT_SCRIPT%" --list "%LIST_RVT%" --out_prefix "%LIST_BY_VER_PREFIX%" --years %ADDIN_VERSIONS% --unknown "%LIST_UNKNOWN%" > "%DETECT_LOG%" 2>&1
 type "%DETECT_LOG%"
 
 set "ANY=0"
