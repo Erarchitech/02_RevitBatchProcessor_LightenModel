@@ -1,4 +1,4 @@
-Param(
+﻿Param(
     [string]$ConfigPath = "$(Split-Path -Parent $MyInvocation.MyCommand.Path)\config.json",
     [string]$AddinVersionOut = ""
 )
@@ -113,9 +113,9 @@ $localFiles = @()
 foreach ($rsn in $rsnPaths) {
     $rsHost = Get-ServerFromRsn $rsn
     $rel = Get-RelFromRsn $rsn
-    $localPath = Join-LocalPath -Root $downloadFolder -RelPath $rel
-    $localDir = Split-Path -Parent $localPath
-    if (-not (Test-Path $localDir)) { New-Item -ItemType Directory -Path $localDir -Force | Out-Null }
+    $fileName = Split-Path -Leaf $rel
+    $localPath = Join-Path -Path $downloadFolder -ChildPath $fileName
+    if (-not (Test-Path $downloadFolder)) { New-Item -ItemType Directory -Path $downloadFolder -Force | Out-Null }
     & $rst L $rel -s $rsHost -d $localPath -o | Out-Null
     $localFiles += $localPath
 }
@@ -130,3 +130,4 @@ if ($outputFolder) { $env:RBP_OUTPUT = $outputFolder }
 Get-Content -Path $rbpRunLog
 
 Remove-Item -Path $tmpList -Force -ErrorAction SilentlyContinue
+
