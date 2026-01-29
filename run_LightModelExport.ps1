@@ -20,6 +20,8 @@ function Normalize-SourceFolder([string]$Folder) {
 function Normalize-Model([string]$Model) {
     if ([string]::IsNullOrWhiteSpace($Model)) { return "" }
     $m = $Model.Trim()
+    # Decode percent-encoded Cyrillic if present
+    $m = Decode-Percent $m
     if ($m.StartsWith("RSN://", [System.StringComparison]::OrdinalIgnoreCase)) {
         return $m
     }
@@ -46,6 +48,44 @@ function Join-LocalPath([string]$Root, [string]$RelPath) {
     return $p
 }
 
+function Decode-Percent([string]$Text) {
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $Text }
+    $prev = $Text
+    for ($i = 0; $i -lt 2; $i++) {
+        $dec = [System.Uri]::UnescapeDataString($prev)
+        if ($dec -eq $prev) { break }
+        $prev = $dec
+    }
+    return $prev
+}
+
+function Convert-ToRsPath([string]$RelPath) {
+    if ([string]::IsNullOrWhiteSpace($RelPath)) { return "|" }
+    $p = $RelPath -replace "[/\\]", "|"
+    $p = $p.Trim("|")
+    if ($p.Length -eq 0) { return "|" }
+    return "|" + $p
+}
+
+function Get-RsnPathsFromServer([string]$Server, [int]$Version, [string]$StartPath, [string]$ListScriptPath) {
+    if (-not (Test-Path $ListScriptPath)) { throw "List script not found: $ListScriptPath" }
+    $tmp = Join-Path -Path $env:TEMP -ChildPath ("RevitServerModels_{0}.txt" -f ([guid]::NewGuid().ToString("N")))
+    $sb = [ScriptBlock]::Create((Get-Content -Raw -Path $ListScriptPath))
+    & $sb -Server $Server -Version $Version -OutFile $tmp -StartPath $StartPath
+    if (-not (Test-Path $tmp)) { throw "List script did not produce output: $tmp" }
+    $lines = Get-Content -Path $tmp -Encoding UTF8 | Where-Object { $_ -and $_.Trim() -ne "" }
+    Remove-Item -Path $tmp -Force -ErrorAction SilentlyContinue
+
+    $rsn = @()
+    foreach ($line in $lines) {
+        $decoded = Decode-Percent $line.Trim()
+        $rel = $decoded.Trim().TrimStart("|")
+        if ([string]::IsNullOrWhiteSpace($rel)) { continue }
+        $rsn += ("RSN://{0}/{1}" -f $Server, $rel.Replace("|","/"))
+    }
+    return $rsn
+}
+
 if (-not (Test-Path $ConfigPath)) {
     throw "Config not found: $ConfigPath"
 }
@@ -65,11 +105,26 @@ if ([string]::IsNullOrWhiteSpace($revitVersion)) {
 if ([string]::IsNullOrWhiteSpace($downloadFolder)) {
     throw "download_folder is required in config.json"
 }
-if ($models.Count -eq 0) {
-    throw "models list is empty in config.json"
-}
 
 $rsnPaths = @()
+if ($models.Count -eq 0) {
+    $listScript = Join-Path -Path (Split-Path -Parent $MyInvocation.MyCommand.Path) -ChildPath "ListRevitServerModels.ps1"
+    $verInt = [int]$revitVersion
+    if ($sourceFolder.StartsWith("RSN://", [System.StringComparison]::OrdinalIgnoreCase)) {
+        $rsHost = Get-ServerFromRsn $sourceFolder
+        $rel = Get-RelFromRsn $sourceFolder
+        $startPath = Convert-ToRsPath $rel
+    } else {
+        if (-not $rsHostDefault) { throw "RS_HOST is required when source_folder is not RSN://..." }
+        $rsHost = $rsHostDefault
+        $startPath = Convert-ToRsPath $sourceFolder
+    }
+    $rsnPaths = Get-RsnPathsFromServer -Server $rsHost -Version $verInt -StartPath $startPath -ListScriptPath $listScript
+    if ($rsnPaths.Count -eq 0) {
+        throw "No models found on Revit Server for source_folder: $($cfg.source_folder)"
+    }
+}
+
 foreach ($m in $models) {
     $nm = Normalize-Model $m
     if ([string]::IsNullOrWhiteSpace($nm)) { continue }
@@ -94,7 +149,7 @@ if ($rsnPaths.Count -eq 0) {
     throw "No RSN paths resolved from config.json"
 }
 
-$rst = "C:\Program Files\Autodesk\Revit 2024\RevitServerToolCommand\RevitServerTool.exe"
+$rst = "C:\Program Files\Autodesk\Revit $revitVersion\RevitServerToolCommand\RevitServerTool.exe"
 $rbp = "$env:LOCALAPPDATA\RevitBatchProcessor\BatchRvt.exe"
 $taskScript = Join-Path -Path (Split-Path -Parent $MyInvocation.MyCommand.Path) -ChildPath "clean_model.py"
 $logFolder = Join-Path -Path (Split-Path -Parent $MyInvocation.MyCommand.Path) -ChildPath "PROJECT\Scripts\BatchRvtLogs"
@@ -113,6 +168,7 @@ $localFiles = @()
 foreach ($rsn in $rsnPaths) {
     $rsHost = Get-ServerFromRsn $rsn
     $rel = Get-RelFromRsn $rsn
+    $rel = Decode-Percent $rel
     $fileName = Split-Path -Leaf $rel
     $localPath = Join-Path -Path $downloadFolder -ChildPath $fileName
     if (-not (Test-Path $downloadFolder)) { New-Item -ItemType Directory -Path $downloadFolder -Force | Out-Null }

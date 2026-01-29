@@ -13,10 +13,6 @@ set CONFIG_JSON=%SCRIPT_DIR%config.json
 set DISABLE_ADDINS=%SCRIPT_DIR%disable_addins.bat
 set ENABLE_ADDINS=%SCRIPT_DIR%enable_addins.bat
 set "PS_EXE=powershell"
-set ADDIN_VERSION=2024
-
-
-
 
 echo ================================
 echo ВЫГРУЗКА МОДЕЛЕЙ С REVIT SERVER
