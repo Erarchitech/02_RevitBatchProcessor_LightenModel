@@ -1,88 +1,112 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+    Получение списка моделей с Revit Server
+#>
+
 param(
-  [Parameter(Mandatory = $true)][string]$Server,     # IP Revit Server
-  [Parameter(Mandatory = $true)][int]$Version,       # 2024
-  [Parameter(Mandatory = $true)][string]$OutFile,    # C:\Temp\RevitServerModels.txt
-  [string]$StartPath = "|",                          # "|" или "|Project|Subfolder"
-  [switch]$Https
+    [Parameter(Mandatory)][string]$Server,
+    [Parameter(Mandatory)][int]$Version,
+    [Parameter(Mandatory)][string]$OutFile,
+    [string]$StartPath = "|",
+    [switch]$Https,
+    [int]$Timeout = 30
 )
 
-Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-$scheme = $(if ($Https) { "https" } else { "http" })
-$base = "${scheme}://$Server/RevitServerAdminRESTService$Version/AdminRESTService.svc"
+$ProgressPreference = "SilentlyContinue"
+
+$scheme = if ($Https) { "https" } else { "http" }
+$baseUrl = "${scheme}://${Server}/RevitServerAdminRESTService${Version}/AdminRESTService.svc"
 
 $headers = @{
-  "User-Name"         = $env:USERNAME
-  "User-Machine-Name" = $env:COMPUTERNAME
-  "Operation-GUID"    = ([guid]::NewGuid().ToString())
-  "Accept"            = "application/json"
+    "User-Name"         = $env:USERNAME
+    "User-Machine-Name" = $env:COMPUTERNAME
+    "Operation-GUID"    = ([guid]::NewGuid().ToString())
+    "Accept"            = "application/json"
 }
 
-function ConvertTo-RsPath([string]$p) {
-  if ([string]::IsNullOrWhiteSpace($p)) { return "|" }
-  $p = $p.Trim()
-  if ($p -notlike "|*") { $p = "|" + $p }
-  $p = $p.TrimEnd("|")
-  if ($p.Length -eq 0) { $p = "|" }
-  return $p
+$script:Models = @()
+$script:Errors = 0
+
+function Normalize-RsPath([string]$p) {
+    if ([string]::IsNullOrWhiteSpace($p)) { return "|" }
+    $p = $p.Trim()
+    if ($p -notlike "|*") { $p = "|" + $p }
+    $p = $p.TrimEnd("|")
+    if ($p.Length -eq 0) { $p = "|" }
+    return $p
 }
 
-function Get-ContentsJson([string]$rsPath) {
-  $rsPath = ConvertTo-RsPath $rsPath
-  $uri = "$base/$rsPath/Contents"
-
-  try {
-    return Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-  }
-  catch {
-    $resp = $_.Exception.Response
-    if ($null -eq $resp) { throw }
-
-    $stream = $resp.GetResponseStream()
-    if ($null -eq $stream) { throw }
-
-    $reader = New-Object System.IO.StreamReader($stream)
-    $body = $reader.ReadToEnd()
-
-    if ([string]::IsNullOrWhiteSpace($body)) { throw }
-    return ($body | ConvertFrom-Json)
-  }
-}
-
-function Add-ModelLine([string]$rsFolderPath, $modelObj) {
-  $name = $null
-  if ($modelObj -is [string]) { $name = $modelObj }
-  elseif ($null -ne $modelObj.Name) { $name = [string]$modelObj.Name }
-
-  if ([string]::IsNullOrWhiteSpace($name)) { return }
-  if ($name.ToLower().EndsWith(".rvt") -eq $false) { return }
-
-  $full = "$(ConvertTo-RsPath $rsFolderPath)|$name"
-  Add-Content -Path $OutFile -Value $full -Encoding UTF8
+function Get-Contents([string]$rsPath) {
+    $uri = "$baseUrl/$rsPath/Contents"
+    try {
+        return Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -TimeoutSec $Timeout
+    } catch {
+        throw "API Error: $($_.Exception.Message)"
+    }
 }
 
 function Walk([string]$rsPath) {
-  $rsPath = ConvertTo-RsPath $rsPath
-  $j = Get-ContentsJson $rsPath
-
-  if ($null -ne $j.Models) {
-    foreach ($m in $j.Models) { Add-ModelLine $rsPath $m }
-  }
-
-  if ($null -ne $j.Folders) {
-    foreach ($f in $j.Folders) {
-      $fname = $null
-      if ($f -is [string]) { $fname = $f }
-      elseif ($null -ne $f.Name) { $fname = [string]$f.Name }
-      if ([string]::IsNullOrWhiteSpace($fname)) { continue }
-
-      Walk "$rsPath|$fname"
+    $rsPath = Normalize-RsPath $rsPath
+    
+    try {
+        $contents = Get-Contents $rsPath
+    } catch {
+        Write-Warning "Failed: $rsPath - $($_.Exception.Message)"
+        $script:Errors++
+        return
     }
-  }
+    
+    # Модели
+    if ($contents.Models) {
+        foreach ($m in $contents.Models) {
+            $name = if ($m -is [string]) { $m } else { $m.Name }
+            if ($name -and $name.ToLower().EndsWith(".rvt")) {
+                $fullPath = "$(Normalize-RsPath $rsPath)|$name"
+                $script:Models += $fullPath
+            }
+        }
+    }
+    
+    # Подпапки
+    if ($contents.Folders) {
+        foreach ($f in $contents.Folders) {
+            $fname = if ($f -is [string]) { $f } else { $f.Name }
+            if ($fname) {
+                $subPath = if ($rsPath -eq "|") { "|$fname" } else { "$rsPath|$fname" }
+                Walk $subPath
+            }
+        }
+    }
 }
 
-# --- START ---
-$StartPath = ConvertTo-RsPath $StartPath
-Remove-Item $OutFile -ErrorAction SilentlyContinue
+# Проверка подключения
+Write-Host "Connecting to $Server..."
+try {
+    $null = Get-Contents (Normalize-RsPath $StartPath)
+} catch {
+    Write-Error "Cannot connect: $($_.Exception.Message)"
+    exit 1
+}
 
-Walk $StartPath
+# Обход
+Write-Host "Scanning..."
+Walk (Normalize-RsPath $StartPath)
+
+# Сохранение
+$outDir = Split-Path -Parent $OutFile
+if ($outDir -and -not (Test-Path $outDir)) {
+    New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+}
+
+if (Test-Path $OutFile) { Remove-Item $OutFile -Force }
+
+if ($script:Models.Count -gt 0) {
+    Set-Content -Path $OutFile -Value $script:Models -Encoding UTF8
+}
+
+Write-Host "Found: $($script:Models.Count) models"
+if ($script:Errors -gt 0) {
+    Write-Warning "Errors: $script:Errors"
+}

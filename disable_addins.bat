@@ -1,48 +1,56 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-:: Usage: disable_addins.bat [RevitVersion]
-:: Example: disable_addins.bat 2024
+:: ============================================================================
+:: DISABLE REVIT ADDINS
+:: ============================================================================
 
 set "VER=%~1"
 if not defined VER set "VER=%RVT_VERSION%"
 
 if not defined VER (
-  echo ERROR: version not set. Pass argument or set RVT_VERSION.
-  exit /b 1
+    echo ERROR: Revit version not specified
+    exit /b 1
 )
 
-set "ADDIN_DIR=%AppData%\Autodesk\Revit\Addins\%VER%"
-set "ADDIN_DIR_PD=%ProgramData%\Autodesk\Revit\Addins\%VER%"
-set "SKIP_ADDIN=BatchRvtAddin%VER%.addin"
+echo.
+echo Disabling Revit %VER% addins...
 
-if exist "%ADDIN_DIR%" (
-  echo Disabling *.addin in "%ADDIN_DIR%"
-  for /f "delims=" %%F in ('dir /b /a-d "%ADDIN_DIR%\*.addin" 2^>nul') do (
-    if /I not "%%F"=="%SKIP_ADDIN%" (
-      echo DISABLE: "%ADDIN_DIR%\%%F"
-      ren "%ADDIN_DIR%\%%F" "%%F.disabled" >nul 2>nul
-    ) else (
-      echo SKIP: "%ADDIN_DIR%\%%F"
+set "ADDIN_USER=%AppData%\Autodesk\Revit\Addins\%VER%"
+set "ADDIN_MACHINE=%ProgramData%\Autodesk\Revit\Addins\%VER%"
+set "SKIP=BatchRvtAddin%VER%.addin"
+set "COUNT=0"
+
+:: User addins
+if exist "%ADDIN_USER%" (
+    for /f "delims=" %%F in ('dir /b /a-d "%ADDIN_USER%\*.addin" 2^>nul') do (
+        if /I not "%%F"=="%SKIP%" (
+            attrib -R "%ADDIN_USER%\%%F" >nul 2>nul
+            if exist "%ADDIN_USER%\%%F.disabled" del "%ADDIN_USER%\%%F.disabled" >nul 2>nul
+            ren "%ADDIN_USER%\%%F" "%%F.disabled" >nul 2>nul
+            if exist "%ADDIN_USER%\%%F.disabled" (
+                echo   [USER] %%F
+                set /a COUNT+=1
+            )
+        )
     )
-  )
-) else (
-  echo WARN: folder not found: "%ADDIN_DIR%"
 )
 
-if exist "%ADDIN_DIR_PD%" (
-  echo Disabling *.addin in "%ADDIN_DIR_PD%"
-  for /f "delims=" %%F in ('dir /b /a-d "%ADDIN_DIR_PD%\*.addin" 2^>nul') do (
-    if /I not "%%F"=="%SKIP_ADDIN%" (
-      echo DISABLE: "%ADDIN_DIR_PD%\%%F"
-      ren "%ADDIN_DIR_PD%\%%F" "%%F.disabled" >nul 2>nul
-    ) else (
-      echo SKIP: "%ADDIN_DIR_PD%\%%F"
+:: Machine addins
+if exist "%ADDIN_MACHINE%" (
+    for /f "delims=" %%F in ('dir /b /a-d "%ADDIN_MACHINE%\*.addin" 2^>nul') do (
+        if /I not "%%F"=="%SKIP%" (
+            attrib -R "%ADDIN_MACHINE%\%%F" >nul 2>nul
+            if exist "%ADDIN_MACHINE%\%%F.disabled" del "%ADDIN_MACHINE%\%%F.disabled" >nul 2>nul
+            ren "%ADDIN_MACHINE%\%%F" "%%F.disabled" >nul 2>nul
+            if exist "%ADDIN_MACHINE%\%%F.disabled" (
+                echo   [MACHINE] %%F
+                set /a COUNT+=1
+            )
+        )
     )
-  )
-) else (
-  echo WARN: folder not found: "%ADDIN_DIR_PD%"
 )
 
-echo DONE.
+echo Disabled: !COUNT! addins
 endlocal
+exit /b 0

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<options>
+  <revit>
+    <convert_linked_files>false</convert_linked_files>
+    <convert_element_ids>true</convert_element_ids>
+    <convert_lights>false</convert_lights>
+    <convert_room_geometry>false</convert_room_geometry>
+    <divide_by_level>true</divide_by_level>
+    <coordinates>shared</coordinates>
+    <faceting_factor>1.0</faceting_factor>
+  </revit>
+</options>

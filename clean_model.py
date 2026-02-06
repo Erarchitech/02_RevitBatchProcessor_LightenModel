@@ -1,20 +1,565 @@
 # -*- coding: utf-8 -*-
+"""
+Revit Model Cleaner Script for BatchRvt
+Version: 4.0 - Enhanced dialog suppression for Revit 2022-2024
+"""
 
 import clr
 import System
 import os
 import json
+import time
+import threading
+
 clr.AddReference("System.Core")
 clr.ImportExtensions(System.Linq)
-
 clr.AddReference("RevitAPI")
 clr.AddReference("RevitAPIUI")
+
 from Autodesk.Revit.DB import *
+from Autodesk.Revit.DB.Events import *
+from Autodesk.Revit.UI import *
+from Autodesk.Revit.UI.Events import *
 from System.Collections.Generic import List
 from System import Guid
 
+# Win32 API для закрытия системных диалогов
+try:
+    clr.AddReference("System.Windows.Forms")
+    clr.AddReference("System.Runtime.InteropServices")
+    from System.Runtime.InteropServices import DllImport, Marshal
+    from System.Windows.Forms import SendKeys
+    import ctypes
+    HAS_WIN32 = True
+except:
+    HAS_WIN32 = False
+
+# Navisworks Export
+try:
+    from Autodesk.Revit.DB import NavisworksExportOptions, NavisworksExportScope, NavisworksCoordinates
+    HAS_NAVISWORKS_EXPORT = True
+except ImportError:
+    HAS_NAVISWORKS_EXPORT = False
+
 import revit_script_util
 from revit_script_util import Output
+
+# ============================================================================
+# WIN32 API ДЛЯ ЗАКРЫТИЯ СИСТЕМНЫХ ДИАЛОГОВ
+# ============================================================================
+
+if HAS_WIN32:
+    try:
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        
+        # Константы Win32
+        WM_CLOSE = 0x0010
+        WM_COMMAND = 0x0111
+        BM_CLICK = 0x00F5
+        IDOK = 1
+        IDCANCEL = 2
+        IDYES = 6
+        IDNO = 7
+        GW_CHILD = 5
+        
+        EnumWindows = user32.EnumWindows
+        EnumChildWindows = user32.EnumChildWindows
+        GetWindowTextW = user32.GetWindowTextW
+        GetClassNameW = user32.GetClassNameW
+        GetWindowThreadProcessId = user32.GetWindowThreadProcessId
+        SendMessageW = user32.SendMessageW
+        PostMessageW = user32.PostMessageW
+        IsWindowVisible = user32.IsWindowVisible
+        FindWindowExW = user32.FindWindowExW
+        GetCurrentProcessId = kernel32.GetCurrentProcessId
+        
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int))
+        
+        WIN32_AVAILABLE = True
+    except Exception as e:
+        WIN32_AVAILABLE = False
+        Output("Win32 API init failed: {0}".format(e))
+else:
+    WIN32_AVAILABLE = False
+
+
+class Win32DialogKiller:
+    """Фоновый поток для закрытия системных диалогов Windows"""
+    
+    # Заголовки диалогов для автозакрытия (частичное совпадение)
+    DIALOG_TITLES = [
+        "Autodesk Revit",
+        "Warning",
+        "Предупреждение",
+        "Error",
+        "Ошибка",
+        "Units",
+        "Единицы",
+        "Scale",
+        "Масштаб",
+        "Missing",
+        "Отсутствует",
+        "Worksets",
+        "Рабочие наборы",
+        "Updating",
+        "Обновление",
+        "Loading",
+        "Загрузка",
+        "Audit",
+        "Аудит",
+        "Compact",
+        "Сжатие",
+        "Save",
+        "Сохранение",
+        "Specify",
+        "Укажите",
+        "Information",
+        "Информация",
+        "Notification",
+        "Уведомление",
+    ]
+    
+    # Классы окон диалогов
+    DIALOG_CLASSES = [
+        "#32770",  # Стандартный диалог Windows
+        "TaskDialog",
+        "Button",
+    ]
+    
+    def __init__(self):
+        self._running = False
+        self._thread = None
+        self._closed_count = 0
+        self._process_id = None
+        self._lock = threading.Lock()
+    
+    def start(self):
+        """Запустить фоновый поток"""
+        if not WIN32_AVAILABLE:
+            Output("Win32 dialog killer: NOT AVAILABLE")
+            return
+        
+        if self._running:
+            return
+        
+        self._running = True
+        self._process_id = GetCurrentProcessId()
+        self._thread = threading.Thread(target=self._monitor_loop)
+        self._thread.daemon = True
+        self._thread.start()
+        Output("Win32 dialog killer: STARTED (PID: {0})".format(self._process_id))
+    
+    def stop(self):
+        """Остановить фоновый поток"""
+        self._running = False
+        if self._thread:
+            self._thread.join(timeout=2.0)
+        Output("Win32 dialog killer: STOPPED (closed: {0})".format(self._closed_count))
+    
+    def _monitor_loop(self):
+        """Основной цикл мониторинга"""
+        while self._running:
+            try:
+                self._find_and_close_dialogs()
+            except:
+                pass
+            time.sleep(0.3)  # Проверка каждые 300мс
+    
+    def _find_and_close_dialogs(self):
+        """Найти и закрыть диалоговые окна"""
+        if not self._process_id:
+            return
+        
+        dialogs_to_close = []
+        
+        def enum_callback(hwnd, lparam):
+            try:
+                # Проверяем что окно видимо
+                if not IsWindowVisible(hwnd):
+                    return True
+                
+                # Проверяем что окно принадлежит нашему процессу
+                pid = ctypes.c_ulong()
+                GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                if pid.value != self._process_id:
+                    return True
+                
+                # Получаем заголовок окна
+                title_buf = ctypes.create_unicode_buffer(256)
+                GetWindowTextW(hwnd, title_buf, 256)
+                title = title_buf.value
+                
+                # Получаем класс окна
+                class_buf = ctypes.create_unicode_buffer(256)
+                GetClassNameW(hwnd, class_buf, 256)
+                class_name = class_buf.value
+                
+                # Проверяем класс окна
+                is_dialog_class = any(dc in class_name for dc in self.DIALOG_CLASSES)
+                
+                # Проверяем заголовок
+                title_lower = title.lower() if title else ""
+                is_dialog_title = any(dt.lower() in title_lower for dt in self.DIALOG_TITLES)
+                
+                if is_dialog_class and (is_dialog_title or not title):
+                    dialogs_to_close.append((hwnd, title, class_name))
+                
+            except:
+                pass
+            return True
+        
+        # Перечисляем окна
+        callback = WNDENUMPROC(enum_callback)
+        EnumWindows(callback, None)
+        
+        # Закрываем найденные диалоги
+        for hwnd, title, class_name in dialogs_to_close:
+            self._close_dialog(hwnd, title)
+    
+    def _close_dialog(self, hwnd, title):
+        """Закрыть диалоговое окно"""
+        try:
+            # Пробуем найти кнопки OK, Yes, Continue
+            button_ids = [IDOK, IDYES, 1001, 1002]  # OK, Yes, и другие
+            
+            for btn_id in button_ids:
+                try:
+                    # Отправляем команду нажатия кнопки
+                    result = SendMessageW(hwnd, WM_COMMAND, btn_id, 0)
+                    if result == 0:
+                        with self._lock:
+                            self._closed_count += 1
+                        Output("  [WIN32] Closed: {0}".format(title[:50] if title else "Unknown"))
+                        return True
+                except:
+                    pass
+            
+            # Если не удалось - отправляем WM_CLOSE
+            PostMessageW(hwnd, WM_CLOSE, 0, 0)
+            with self._lock:
+                self._closed_count += 1
+            Output("  [WIN32] Force closed: {0}".format(title[:50] if title else "Unknown"))
+            return True
+            
+        except:
+            return False
+    
+    def get_closed_count(self):
+        with self._lock:
+            return self._closed_count
+
+
+# ============================================================================
+# РАСШИРЕННЫЙ ПОДАВИТЕЛЬ ДИАЛОГОВ REVIT API
+# ============================================================================
+
+class EnhancedDialogSuppressor:
+    """Улучшенный перехватчик диалогов Revit с поддержкой 2024"""
+    
+    def __init__(self, uiapp):
+        self.uiapp = uiapp
+        self.app = uiapp.Application if uiapp else None
+        self.suppressed_count = 0
+        self.suppressed_dialogs = []
+        self._attached = False
+    
+    def attach(self):
+        """Подключить все обработчики"""
+        if self._attached:
+            return
+        
+        try:
+            # 1. DialogBoxShowing - основной обработчик UI диалогов
+            self.uiapp.DialogBoxShowing += self._on_dialog
+            Output("  DialogBoxShowing: attached")
+        except Exception as e:
+            Output("  DialogBoxShowing failed: {0}".format(e))
+        
+        try:
+            # 2. FailuresProcessing - обработка ошибок и предупреждений
+            self.app.FailuresProcessing += self._on_failures
+            Output("  FailuresProcessing: attached")
+        except Exception as e:
+            Output("  FailuresProcessing failed: {0}".format(e))
+        
+        try:
+            # 3. DocumentOpening - диалоги при открытии
+            self.app.DocumentOpening += self._on_doc_opening
+            Output("  DocumentOpening: attached")
+        except Exception as e:
+            Output("  DocumentOpening failed: {0}".format(e))
+        
+        self._attached = True
+        Output("Enhanced dialog suppressor: ATTACHED")
+    
+    def detach(self):
+        """Отключить все обработчики"""
+        if not self._attached:
+            return
+        
+        try:
+            self.uiapp.DialogBoxShowing -= self._on_dialog
+        except:
+            pass
+        
+        try:
+            self.app.FailuresProcessing -= self._on_failures
+        except:
+            pass
+        
+        try:
+            self.app.DocumentOpening -= self._on_doc_opening
+        except:
+            pass
+        
+        self._attached = False
+        Output("Enhanced dialog suppressor: DETACHED")
+    
+    def _on_doc_opening(self, sender, args):
+        """Обработчик открытия документа"""
+        try:
+            # Можно настроить параметры открытия
+            Output("  [DOC_OPENING] Document opening event")
+        except:
+            pass
+    
+    def _on_failures(self, sender, args):
+        """Обработчик FailuresProcessing на уровне Application"""
+        try:
+            accessor = args.GetFailuresAccessor()
+            failures = accessor.GetFailureMessages()
+            
+            processed = 0
+            for failure in failures:
+                try:
+                    severity = failure.GetSeverity()
+                    desc = ""
+                    try:
+                        desc = failure.GetDescriptionText()[:50]
+                    except:
+                        pass
+                    
+                    if severity == FailureSeverity.Warning:
+                        accessor.DeleteWarning(failure)
+                        processed += 1
+                        Output("  [FAILURE] Warning deleted: {0}".format(desc))
+                        
+                    elif severity == FailureSeverity.Error:
+                        if failure.HasResolutions():
+                            # Пробуем автоматическое разрешение
+                            try:
+                                accessor.ResolveFailure(failure)
+                                processed += 1
+                                Output("  [FAILURE] Error resolved: {0}".format(desc))
+                            except:
+                                # Если не удалось - удаляем элементы
+                                try:
+                                    ids = failure.GetFailingElementIds()
+                                    if ids and ids.Count > 0:
+                                        accessor.DeleteElements(ids)
+                                        processed += 1
+                                except:
+                                    pass
+                        else:
+                            # Удаляем проблемные элементы
+                            try:
+                                ids = failure.GetFailingElementIds()
+                                if ids and ids.Count > 0:
+                                    accessor.DeleteElements(ids)
+                                    processed += 1
+                            except:
+                                pass
+                except:
+                    pass
+            
+            if processed > 0:
+                self.suppressed_count += processed
+                args.SetProcessingResult(FailureProcessingResult.Continue)
+            
+        except Exception as e:
+            Output("  [FAILURE ERROR] {0}".format(e))
+    
+    def _on_dialog(self, sender, args):
+        """Обработчик диалоговых окон UI"""
+        try:
+            dialog_id = ""
+            help_id = 0
+            
+            if hasattr(args, 'DialogId'):
+                dialog_id = str(args.DialogId)
+            if hasattr(args, 'HelpId'):
+                try:
+                    help_id = args.HelpId
+                except:
+                    pass
+            
+            self.suppressed_dialogs.append(dialog_id)
+            self.suppressed_count += 1
+            
+            dialog_lower = dialog_id.lower() if dialog_id else ""
+            
+            # TaskDialog - используем OverrideResult
+            if hasattr(args, 'OverrideResult'):
+                
+                # === КРИТИЧНО: Диалоги сохранения ===
+                if "save" in dialog_lower:
+                    if "central" in dialog_lower or "workset" in dialog_lower:
+                        args.OverrideResult(6)  # Yes
+                        Output("  [DIALOG] Save Central: YES")
+                    elif "overwrite" in dialog_lower:
+                        args.OverrideResult(6)  # Yes
+                        Output("  [DIALOG] Overwrite: YES")
+                    else:
+                        args.OverrideResult(1001)
+                        Output("  [DIALOG] Save: OK")
+                    return
+                
+                # === Единицы измерения ===
+                if "unit" in dialog_lower or "единиц" in dialog_lower:
+                    args.OverrideResult(1001)  # OK / Continue
+                    Output("  [DIALOG] Units: OK")
+                    return
+                
+                # === Масштаб ===
+                if "scale" in dialog_lower or "масштаб" in dialog_lower:
+                    args.OverrideResult(1001)
+                    Output("  [DIALOG] Scale: OK")
+                    return
+                
+                # === Предупреждения ===
+                if any(w in dialog_lower for w in ["warning", "предупрежден", "updater", "обновл"]):
+                    args.OverrideResult(1001)
+                    Output("  [DIALOG] Warning: OK")
+                    return
+                
+                # === Отсутствующие элементы ===
+                if any(m in dialog_lower for m in ["missing", "not installed", "not found", "отсутств", "не найден"]):
+                    args.OverrideResult(1001)
+                    Output("  [DIALOG] Missing: OK")
+                    return
+                
+                # === Рабочие наборы ===
+                if "workset" in dialog_lower or "рабоч" in dialog_lower:
+                    args.OverrideResult(1001)
+                    Output("  [DIALOG] Workset: OK")
+                    return
+                
+                # === Аудит ===
+                if "audit" in dialog_lower or "аудит" in dialog_lower:
+                    args.OverrideResult(1001)
+                    Output("  [DIALOG] Audit: OK")
+                    return
+                
+                # === Сжатие / Compact ===
+                if "compact" in dialog_lower or "сжат" in dialog_lower:
+                    args.OverrideResult(1001)
+                    Output("  [DIALOG] Compact: OK")
+                    return
+                
+                # === Загрузка семейств ===
+                if "family" in dialog_lower or "семейств" in dialog_lower or "load" in dialog_lower:
+                    args.OverrideResult(1001)
+                    Output("  [DIALOG] Family: OK")
+                    return
+                
+                # === Координаты ===
+                if "coordinate" in dialog_lower or "координат" in dialog_lower:
+                    args.OverrideResult(1001)
+                    Output("  [DIALOG] Coordinates: OK")
+                    return
+                
+                # === Связи ===
+                if "link" in dialog_lower or "связ" in dialog_lower:
+                    args.OverrideResult(1001)
+                    Output("  [DIALOG] Link: OK")
+                    return
+                
+                # === Информационные ===
+                if any(i in dialog_lower for i in ["info", "information", "информац", "notification", "уведомлен"]):
+                    args.OverrideResult(1001)
+                    Output("  [DIALOG] Info: OK")
+                    return
+                
+                # === По HelpId для известных диалогов ===
+                # Revit использует HelpId для идентификации некоторых диалогов
+                known_help_ids = {
+                    # Добавьте сюда известные HelpId если найдёте
+                }
+                if help_id in known_help_ids:
+                    args.OverrideResult(1001)
+                    Output("  [DIALOG] HelpId {0}: OK".format(help_id))
+                    return
+                
+                # === По умолчанию - OK/Continue ===
+                args.OverrideResult(1001)
+                Output("  [DIALOG SUPPRESSED] {0}".format(dialog_id[:60] if dialog_id else "unknown"))
+            
+            # MessageBox - используем OverrideResult для кнопок
+            elif hasattr(args, 'Handled'):
+                args.Handled = True
+                Output("  [MSGBOX SUPPRESSED] {0}".format(dialog_id[:60] if dialog_id else "unknown"))
+            
+        except Exception as e:
+            Output("  [DIALOG ERROR] {0}".format(e))
+    
+    def get_summary(self):
+        return {
+            "count": self.suppressed_count,
+            "dialogs": list(set(self.suppressed_dialogs))
+        }
+
+
+class FailureSwallower(IFailuresPreprocessor):
+    """Обработчик ошибок для транзакций"""
+    
+    def __init__(self):
+        self.failures_count = 0
+        self.warnings_count = 0
+    
+    def PreprocessFailures(self, failuresAccessor):
+        try:
+            failures = failuresAccessor.GetFailureMessages()
+            
+            for failure in failures:
+                severity = failure.GetSeverity()
+                
+                if severity == FailureSeverity.Warning:
+                    failuresAccessor.DeleteWarning(failure)
+                    self.warnings_count += 1
+                    
+                elif severity == FailureSeverity.Error:
+                    if failure.HasResolutions():
+                        failuresAccessor.ResolveFailure(failure)
+                        self.failures_count += 1
+                    else:
+                        try:
+                            ids = failure.GetFailingElementIds()
+                            if ids and ids.Count > 0:
+                                failuresAccessor.DeleteElements(ids)
+                        except:
+                            pass
+                        self.failures_count += 1
+            
+            return FailureProcessingResult.Continue
+            
+        except:
+            return FailureProcessingResult.Continue
+
+
+def create_silent_transaction(doc, name):
+    """Создать транзакцию с подавлением предупреждений"""
+    t = Transaction(doc, name)
+    options = t.GetFailureHandlingOptions()
+    options.SetFailuresPreprocessor(FailureSwallower())
+    options.SetClearAfterRollback(True)
+    t.SetFailureHandlingOptions(options)
+    return t
+
+
+# ============================================================================
+# ИНИЦИАЛИЗАЦИЯ
+# ============================================================================
 
 sessionId = revit_script_util.GetSessionId()
 uiapp = revit_script_util.GetUIApplication()
@@ -23,422 +568,701 @@ revitFilePath = revit_script_util.GetRevitFilePath()
 sessionDataFolderPath = revit_script_util.GetSessionDataFolderPath()
 dataExportFolderPath = revit_script_util.GetDataExportFolderPath()
 
-# Optional JSON config path supplied by the batch file.
+# ============================================================================
+# ЗАГРУЗКА КОНФИГУРАЦИИ
+# ============================================================================
+
 CONFIG_PATH = System.Environment.GetEnvironmentVariable("CLEAN_CONFIG")
 CONFIG = {}
+
 if CONFIG_PATH and System.IO.File.Exists(CONFIG_PATH):
     try:
         CONFIG = json.loads(System.IO.File.ReadAllText(CONFIG_PATH))
         Output("CONFIG: {0}".format(CONFIG_PATH))
     except Exception as e:
-        Output("CONFIG load failed: {0}".format(e))
-
-# Feature toggles (defaults).
-PURGE_UNUSED = True
-DELETE_SHEETS = True
-DELETE_IMPORTS = True
-DELETE_LINKS = True
-COMPACT_ON_SAVE = True
-
-if CONFIG:
-    PURGE_UNUSED = bool(CONFIG.get("purge_unused", PURGE_UNUSED))
-    DELETE_SHEETS = bool(CONFIG.get("delete_sheets", DELETE_SHEETS))
-    DELETE_IMPORTS = bool(CONFIG.get("delete_imports", DELETE_IMPORTS))
-    DELETE_LINKS = bool(CONFIG.get("delete_links", DELETE_LINKS))
-    COMPACT_ON_SAVE = bool(CONFIG.get("compact_on_save", COMPACT_ON_SAVE))
-
-# Define a target folder for the saved model.
-# Leave empty to fall back to BatchRvt paths or the source file directory.
-CUSTOM_OUTPUT_FOLDER = System.Environment.GetEnvironmentVariable("RBP_OUTPUT")
-if (not CUSTOM_OUTPUT_FOLDER or not CUSTOM_OUTPUT_FOLDER.strip()) and CONFIG.get("output_folder"):
-    CUSTOM_OUTPUT_FOLDER = CONFIG.get("output_folder")
-if CUSTOM_OUTPUT_FOLDER and CUSTOM_OUTPUT_FOLDER.strip():
-    Output("CUSTOM_OUTPUT_FOLDER: {0}".format(CUSTOM_OUTPUT_FOLDER))
-TYPE_PURGE_RULES = [
-    ("wall types", WallType, BuiltInCategory.OST_Walls),
-    ("floor types", FloorType, BuiltInCategory.OST_Floors),
-    ("roof types", RoofType, BuiltInCategory.OST_Roofs),
-    ("ceiling types", CeilingType, BuiltInCategory.OST_Ceilings),
-    ("text note types", TextNoteType, BuiltInCategory.OST_TextNotes),
-    ("dimension types", DimensionType, BuiltInCategory.OST_Dimensions),
-    ("filled region types", FilledRegionType, BuiltInCategory.OST_FilledRegion),
-    ("detail line types", ElementType, BuiltInCategory.OST_Lines),
-]
+        Output("CONFIG ERROR: {0}".format(e))
 
 
-def _is_valid(element):
+def get_opt(key, default):
+    if CONFIG:
+        opts = CONFIG.get("cleaning_options", {})
+        if key in opts:
+            return opts[key]
+        if key in CONFIG:
+            return CONFIG[key]
+    return default
+
+
+PURGE_UNUSED = bool(get_opt("purge_unused", True))
+DELETE_SHEETS = bool(get_opt("delete_sheets", True))
+DELETE_IMPORTS = bool(get_opt("delete_imports", True))
+DELETE_LINKS = bool(get_opt("delete_links", True))
+DELETE_VIEWS = bool(get_opt("delete_views", False))
+COMPACT_ON_SAVE = bool(get_opt("compact_on_save", True))
+DRY_RUN = bool(get_opt("dry_run", False))
+VIEWS_TO_KEEP = get_opt("delete_views_except", ["{3D}", "3D"])
+SUPPRESS_DIALOGS = bool(get_opt("suppress_dialogs", True))
+
+EXPORT_NWC = bool(get_opt("export_nwc", False))
+NWC_FOLDER = get_opt("nwc_folder", "")
+NWC_COORDINATES = get_opt("nwc_coordinates", "shared")
+NWC_DIVIDE_BY_LEVEL = bool(get_opt("nwc_divide_by_level", True))
+NWC_CONVERT_IDS = bool(get_opt("nwc_convert_ids", True))
+NWC_CONVERT_LINKS = bool(get_opt("nwc_convert_links", False))
+
+OUTPUT_FOLDER = System.Environment.GetEnvironmentVariable("RBP_OUTPUT")
+if not OUTPUT_FOLDER:
+    OUTPUT_FOLDER = CONFIG.get("output_folder", "")
+
+if DRY_RUN:
+    Output("*** DRY-RUN MODE ***")
+
+
+# ============================================================================
+# СТАТИСТИКА
+# ============================================================================
+
+class Stats:
+    def __init__(self):
+        self.links = 0
+        self.imports = 0
+        self.sheets = 0
+        self.views = 0
+        self.purged = 0
+        self.errors = []
+        self.start = time.time()
+    
+    def error(self, msg):
+        self.errors.append(msg)
+        Output("ERROR: {0}".format(msg))
+    
+    def elapsed(self):
+        return time.time() - self.start
+    
+    def summary(self):
+        Output("")
+        Output("=" * 50)
+        Output("SUMMARY")
+        Output("=" * 50)
+        Output("Links: {0}".format(self.links))
+        Output("Imports: {0}".format(self.imports))
+        Output("Sheets: {0}".format(self.sheets))
+        Output("Views: {0}".format(self.views))
+        Output("Purged: {0}".format(self.purged))
+        Output("Errors: {0}".format(len(self.errors)))
+        Output("Time: {0:.1f}s".format(self.elapsed()))
+        Output("=" * 50)
+
+
+STATS = Stats()
+
+# Глобальные подавители
+DIALOG_SUPPRESSOR = None
+WIN32_KILLER = None
+
+
+# ============================================================================
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# ============================================================================
+
+def is_valid(elem):
     try:
-        return element is not None and element.IsValidObject
+        return elem is not None and elem.IsValidObject
     except:
         return False
 
 
-def _get_class(name):
-    return globals().get(name, None)
-
-
-def _count_collection(items):
-    if items is None:
-        return 0
+def safe_delete(doc, eid, label=""):
+    if DRY_RUN:
+        return 1
     try:
-        return items.Count
+        deleted = doc.Delete(eid)
+        return deleted.Count if deleted else 1
     except:
-        try:
-            return len(items)
-        except:
-            return 0
+        return 0
 
 
-def _delete_by_class(doc, class_name, label):
-    cls = _get_class(class_name)
+def delete_by_class(doc, cls_name, label):
+    cls = globals().get(cls_name)
     if cls is None:
         return 0
+    
+    try:
+        elems = list(FilteredElementCollector(doc).OfClass(cls))
+    except:
+        return 0
+    
+    if not elems:
+        return 0
+    
+    if DRY_RUN:
+        Output("[DRY] {0}: {1}".format(label, len(elems)))
+        return len(elems)
+    
     deleted = 0
-    elems = list(FilteredElementCollector(doc).OfClass(cls))
-    for elem in elems:
-        if not _is_valid(elem):
-            continue
-        try:
-            doc.Delete(elem.Id)
+    for e in elems:
+        if is_valid(e) and safe_delete(doc, e.Id, label) > 0:
             deleted += 1
-        except:
-            pass
-    if deleted > 0:
-        Output("Removed {0}: {1}".format(label, deleted))
+    
+    if deleted:
+        Output("{0}: {1}".format(label, deleted))
+    
     return deleted
 
-def _get_target_folder():
-    if CUSTOM_OUTPUT_FOLDER and CUSTOM_OUTPUT_FOLDER.strip():
-        return CUSTOM_OUTPUT_FOLDER
 
-    for candidate in (dataExportFolderPath, sessionDataFolderPath):
-        if candidate and candidate.strip():
-            return candidate
+def get_output_folder():
+    if OUTPUT_FOLDER and OUTPUT_FOLDER.strip():
+        return OUTPUT_FOLDER
+    
+    for p in (dataExportFolderPath, sessionDataFolderPath):
+        if p and p.strip():
+            return p
+    
+    if revitFilePath:
+        base = System.IO.Path.GetDirectoryName(revitFilePath)
+        if base:
+            return System.IO.Path.Combine(base, "Cleaned")
+    
+    return System.IO.Path.Combine(
+        System.Environment.GetFolderPath(System.Environment.SpecialFolder.DesktopDirectory),
+        "Cleaned"
+    )
 
-    if revitFilePath and revitFilePath.strip():
-        base_dir = System.IO.Path.GetDirectoryName(revitFilePath)
-        if base_dir:
-            return System.IO.Path.Combine(base_dir, "BatchRvt_Clean")
 
-    desktop = System.Environment.GetFolderPath(System.Environment.SpecialFolder.DesktopDirectory)
-    return System.IO.Path.Combine(desktop, "BatchRvt_Clean")
-
-
-def _ensure_directory(path):
+def ensure_dir(path):
     if not System.IO.Directory.Exists(path):
         System.IO.Directory.CreateDirectory(path)
 
 
-def _build_target_path(folder):
-    file_name = None
-    if revitFilePath and revitFilePath.strip():
-        file_name = System.IO.Path.GetFileName(revitFilePath)
-    if not file_name:
-        file_name = doc.Title if doc and doc.Title else "BatchModel.rvt"
-        if not file_name.lower().endswith(".rvt"):
-            file_name = file_name + ".rvt"
-    return System.IO.Path.Combine(folder, file_name)
+def get_output_path(folder):
+    name = None
+    if revitFilePath:
+        name = System.IO.Path.GetFileName(revitFilePath)
+    
+    if not name:
+        name = (doc.Title if doc and doc.Title else "Model") + ".rvt"
+    
+    if not name.lower().endswith(".rvt"):
+        name += ".rvt"
+    
+    return System.IO.Path.Combine(folder, name)
 
 
-def _save_as_central(target_path):
-    save_opts = SaveAsOptions()
-    save_opts.OverwriteExistingFile = True
-    save_opts.MaximumBackups = 1
-    save_opts.Compact = COMPACT_ON_SAVE
+# ============================================================================
+# УДАЛЕНИЕ ЭЛЕМЕНТОВ
+# ============================================================================
 
-    if doc.IsWorkshared:
-        ws_opts = WorksharingSaveAsOptions()
-        try:
-            # Revit 2021+ exposes MakeCentral, older versions rely on SaveAsCentral.
-            ws_opts.MakeCentral = True
-        except AttributeError:
-            ws_opts.SaveAsCentral = True
-        save_opts.SetWorksharingOptions(ws_opts)
-    else:
-        Output("Warning: model is not workshared, saving as a regular file.")
-
-    doc.SaveAs(target_path, save_opts)
-
-def delete_revit_links(doc):
-    deleted = 0
-    deleted += _delete_by_class(doc, "RevitLinkInstance", "Revit link instances")
-    deleted += _delete_by_class(doc, "RevitLinkType", "Revit link types")
-    deleted += _delete_by_class(doc, "CoordinationModel", "Coordination models")
-    deleted += _delete_by_class(doc, "PointCloudInstance", "Point clouds")
-    deleted += _delete_by_class(doc, "PointCloudType", "Point cloud types")
-    deleted += _delete_by_class(doc, "ImageType", "Raster images")
-    deleted += _delete_by_class(doc, "DecalType", "Decals")
-    if deleted == 0:
-        Output("Removed Revit links: 0")
+def delete_links(doc):
+    d = 0
+    d += delete_by_class(doc, "RevitLinkInstance", "Link instances")
+    d += delete_by_class(doc, "RevitLinkType", "Link types")
+    d += delete_by_class(doc, "CoordinationModel", "Coordination models")
+    d += delete_by_class(doc, "PointCloudInstance", "Point clouds")
+    d += delete_by_class(doc, "PointCloudType", "Point cloud types")
+    d += delete_by_class(doc, "ImageType", "Images")
+    d += delete_by_class(doc, "DecalType", "Decals")
+    
+    if d == 0:
+        Output("Links: none")
+    
+    return d
 
 
-def delete_imported_content(doc):
-    deleted = 0
-    deleted += _delete_by_class(doc, "ImportInstance", "Imported CAD instances")
-    deleted += _delete_by_class(doc, "CADLinkType", "CAD link types")
-    return deleted
+def delete_imports(doc):
+    d = 0
+    d += delete_by_class(doc, "ImportInstance", "CAD instances")
+    d += delete_by_class(doc, "CADLinkType", "CAD types")
+    
+    if d == 0:
+        Output("Imports: none")
+    
+    return d
+
 
 def delete_sheets(doc):
-    deleted = 0
-    sheets = list(FilteredElementCollector(doc).OfClass(ViewSheet))
-    for sheet in sheets:
-        if not _is_valid(sheet):
-            continue
-        try:
-            doc.Delete(sheet.Id)
-            deleted += 1
-        except:
-            pass
-    if deleted > 0:
-        Output("Removed sheets: {0}".format(deleted))
-    return deleted
-
-def _collect_used_family_symbol_ids(doc):
-    used_ids = set()
-    instances = FilteredElementCollector(doc).OfClass(FamilyInstance).WhereElementIsNotElementType()
-    for inst in instances:
-        if not _is_valid(inst):
-            continue
-        try:
-            type_id = inst.GetTypeId()
-            if type_id != ElementId.InvalidElementId:
-                used_ids.add(type_id)
-        except:
-            pass
-    return used_ids
-
-
-def _collect_used_type_ids_by_category(doc, bic):
-    used_ids = set()
-    collector = FilteredElementCollector(doc).OfCategory(bic).WhereElementIsNotElementType()
-    for elem in collector:
-        if not _is_valid(elem):
-            continue
-        try:
-            type_id = elem.GetTypeId()
-            if type_id != ElementId.InvalidElementId:
-                used_ids.add(type_id)
-        except:
-            pass
-    return used_ids
-
-
-def _collect_all_used_type_ids(doc):
-    used_ids = set()
-    collector = FilteredElementCollector(doc).WhereElementIsNotElementType()
-    for elem in collector:
-        if not _is_valid(elem):
-            continue
-        try:
-            type_id = elem.GetTypeId()
-            if type_id != ElementId.InvalidElementId:
-                used_ids.add(type_id)
-        except:
-            pass
-    return used_ids
-
-
-def _purge_unused_family_symbols(doc):
-    used_ids = _collect_used_family_symbol_ids(doc)
-    deleted = 0
-    symbols = list(FilteredElementCollector(doc).OfClass(FamilySymbol))
-    for sym in symbols:
-        if not _is_valid(sym):
-            continue
-        if sym.Id in used_ids:
-            continue
-        try:
-            doc.Delete(sym.Id)
-            deleted += 1
-        except:
-            pass
-    if deleted > 0:
-        Output("Removed unused family symbols: {0}".format(deleted))
-    return deleted
-
-
-def _purge_unused_types_for_category(doc, label, type_class, bic):
-    category = Category.GetCategory(doc, bic)
-    if category is None:
+    try:
+        sheets = list(FilteredElementCollector(doc).OfClass(ViewSheet))
+    except:
         return 0
-    target_cat_id = category.Id
-    used_ids = _collect_used_type_ids_by_category(doc, bic)
+    
+    if not sheets:
+        Output("Sheets: none")
+        return 0
+    
+    if DRY_RUN:
+        Output("[DRY] Sheets: {0}".format(len(sheets)))
+        return len(sheets)
+    
     deleted = 0
-    types = list(FilteredElementCollector(doc).OfClass(type_class))
-    for elem_type in types:
-        if not _is_valid(elem_type):
-            continue
-        type_cat = elem_type.Category
-        if type_cat is None or type_cat.Id != target_cat_id:
-            continue
-        if elem_type.Id in used_ids:
-            continue
-        try:
-            doc.Delete(elem_type.Id)
+    for s in sheets:
+        if is_valid(s) and safe_delete(doc, s.Id) > 0:
             deleted += 1
-        except:
-            pass
-    if deleted > 0:
-        Output("Removed unused {0}: {1}".format(label, deleted))
+    
+    Output("Sheets: {0}".format(deleted))
     return deleted
 
 
-def _purge_unused_materials(doc):
-    materials = list(FilteredElementCollector(doc).OfClass(Material))
-    deleted = 0
-    for mat in materials:
-        if not _is_valid(mat):
+def delete_views(doc):
+    try:
+        views = list(FilteredElementCollector(doc).OfClass(View))
+    except:
+        return 0
+    
+    to_delete = []
+    kept = 0
+    
+    for v in views:
+        if not is_valid(v):
             continue
+        
         try:
-            doc.Delete(mat.Id)
-            deleted += 1
+            if v.IsTemplate or isinstance(v, ViewSheet):
+                continue
         except:
-            pass
-    if deleted > 0:
-        Output("Removed unused materials: {0}".format(deleted))
+            continue
+        
+        name = v.Name if v.Name else ""
+        keep = False
+        
+        for pattern in VIEWS_TO_KEEP:
+            if pattern.lower() in name.lower():
+                keep = True
+                break
+        
+        if keep:
+            kept += 1
+        else:
+            to_delete.append(v)
+    
+    if not to_delete:
+        return 0
+    
+    if DRY_RUN:
+        Output("[DRY] Views: {0} (keep {1})".format(len(to_delete), kept))
+        return len(to_delete)
+    
+    deleted = 0
+    for v in to_delete:
+        if safe_delete(doc, v.Id) > 0:
+            deleted += 1
+    
+    Output("Views: {0} (kept {1})".format(deleted, kept))
     return deleted
 
 
-def _purge_unused_general_types(doc):
-    used_ids = _collect_all_used_type_ids(doc)
-    deleted = 0
-    element_types = list(FilteredElementCollector(doc).WhereElementIsElementType())
-    for elem_type in element_types:
-        if not _is_valid(elem_type):
-            continue
-        elem_id = elem_type.Id
-        if elem_id == ElementId.InvalidElementId or elem_id in used_ids:
-            continue
-        try:
-            doc.Delete(elem_id)
-            deleted += 1
-        except:
-            pass
-    if deleted > 0:
-        Output("Removed unused element types: {0}".format(deleted))
-    return deleted
+# ============================================================================
+# ОЧИСТКА НЕИСПОЛЬЗУЕМОГО
+# ============================================================================
+
+def get_used_type_ids(doc):
+    used = set()
+    try:
+        for e in FilteredElementCollector(doc).WhereElementIsNotElementType():
+            if is_valid(e):
+                try:
+                    tid = e.GetTypeId()
+                    if tid != ElementId.InvalidElementId:
+                        used.add(tid)
+                except:
+                    pass
+    except:
+        pass
+    
+    return used
 
 
-def _purge_unused_via_performance_adviser(doc):
+def purge_via_adviser(doc):
+    if DRY_RUN:
+        Output("[DRY] PerformanceAdviser purge")
+        return 0
+    
     purge_guid = Guid("e8c63650-70b7-435a-9010-ec97660c1bda")
     rule_id = None
-    for rule in PerformanceAdviser.GetPerformanceAdviser().GetAllRuleIds():
-        if rule.Guid.Equals(purge_guid):
-            rule_id = rule
-            break
-
-    if rule_id is None:
-        Output("Purge rule not found; falling back to manual purge.")
+    
+    try:
+        for rule in PerformanceAdviser.GetPerformanceAdviser().GetAllRuleIds():
+            if rule.Guid.Equals(purge_guid):
+                rule_id = rule
+                break
+    except:
         return None
-
-    total_deleted = 0
-    max_passes = 20
-    for pass_index in range(1, max_passes + 1):
+    
+    if rule_id is None:
+        return None
+    
+    total = 0
+    for i in range(1, 21):
         try:
-            rule_ids = List[PerformanceAdviserRuleId]()
-            rule_ids.Add(rule_id)
-            failure_messages = PerformanceAdviser.GetPerformanceAdviser().ExecuteRules(doc, rule_ids)
-            if failure_messages is None or failure_messages.Count == 0:
+            rules = List[PerformanceAdviserRuleId]()
+            rules.Add(rule_id)
+            
+            msgs = PerformanceAdviser.GetPerformanceAdviser().ExecuteRules(doc, rules)
+            if not msgs or msgs.Count == 0:
                 break
-            purgeable_ids = failure_messages[0].GetFailingElements()
-            if purgeable_ids is None or purgeable_ids.Count == 0:
+            
+            ids = msgs[0].GetFailingElements()
+            if not ids or ids.Count == 0:
                 break
-            t = Transaction(doc, "Purge unused elements")
+            
+            t = create_silent_transaction(doc, "Purge {0}".format(i))
             try:
                 t.Start()
-                deleted_ids = doc.Delete(purgeable_ids)
+                deleted = doc.Delete(ids)
                 t.Commit()
-            except Exception as ex:
+                
+                count = deleted.Count if deleted else 0
+                total += count
+                
+                if count == 0:
+                    break
+            except:
                 if t.HasStarted():
                     t.RollBack()
-                Output("PurgeUnused (PerformanceAdviser) failed: {0}".format(ex))
                 break
-            removed_count = _count_collection(deleted_ids)
-            total_deleted += removed_count
-            if removed_count == 0:
-                break
-        except Exception as ex:
-            Output("PurgeUnused (PerformanceAdviser) failed: {0}".format(ex))
+        except:
             break
+    
+    Output("Adviser purge: {0}".format(total))
+    return total
 
-    Output("Purge via PerformanceAdviser removed: {0}".format(total_deleted))
-    return total_deleted
 
-
-def _purge_unused_manual(doc):
-    total_deleted = 0
-    max_passes = 20
-    for pass_index in range(1, max_passes + 1):
-        deleted_this_pass = 0
-        t = Transaction(doc, "Purge unused elements (manual)")
+def purge_manual(doc):
+    if DRY_RUN:
+        Output("[DRY] Manual purge")
+        return 0
+    
+    total = 0
+    for i in range(1, 21):
+        deleted = 0
+        t = create_silent_transaction(doc, "Manual purge {0}".format(i))
+        
         try:
             t.Start()
-            deleted_this_pass += _purge_unused_family_symbols(doc)
-            deleted_this_pass += _purge_unused_general_types(doc)
-            for label, type_class, bic in TYPE_PURGE_RULES:
-                deleted_this_pass += _purge_unused_types_for_category(doc, label, type_class, bic)
-            deleted_this_pass += _purge_unused_materials(doc)
+            
+            used_ids = get_used_type_ids(doc)
+            
+            for sym in FilteredElementCollector(doc).OfClass(FamilySymbol):
+                if is_valid(sym) and sym.Id not in used_ids:
+                    if safe_delete(doc, sym.Id) > 0:
+                        deleted += 1
+            
+            for et in FilteredElementCollector(doc).WhereElementIsElementType():
+                if is_valid(et) and et.Id not in used_ids:
+                    if safe_delete(doc, et.Id) > 0:
+                        deleted += 1
+            
+            for mat in FilteredElementCollector(doc).OfClass(Material):
+                if is_valid(mat):
+                    if safe_delete(doc, mat.Id) > 0:
+                        deleted += 1
+            
             t.Commit()
-        except Exception as ex:
+            
+        except:
             if t.HasStarted():
                 t.RollBack()
-            Output("Manual purge failed: {0}".format(ex))
             break
+        
+        if deleted == 0:
+            break
+        
+        total += deleted
+        Output("  Pass {0}: {1}".format(i, deleted))
+    
+    Output("Manual purge: {0}".format(total))
+    return total
 
-        if deleted_this_pass == 0:
-            Output("Unused elements purge finished. Total removed: {0} in {1} passes.".format(total_deleted, pass_index if total_deleted > 0 else 1))
-            return total_deleted
 
-        total_deleted += deleted_this_pass
-
-    Output("Unused elements purge finished. Total removed: {0} in {1} passes (max reached).".format(total_deleted, max_passes))
-    return total_deleted
-
-
-def purge_unused_families(doc):
-    result = _purge_unused_via_performance_adviser(doc)
+def purge_unused(doc):
+    Output("")
+    Output("Purging unused...")
+    
+    result = purge_via_adviser(doc)
     if result is None:
-        return _purge_unused_manual(doc)
-    return result
+        result = purge_manual(doc)
+    
+    return result or 0
 
+
+# ============================================================================
+# СОХРАНЕНИЕ
+# ============================================================================
+
+def save_model(doc, path):
+    if DRY_RUN:
+        Output("[DRY] Save: {0}".format(path))
+        return
+    
+    Output("")
+    Output("=" * 50)
+    Output("SAVING MODEL")
+    Output("=" * 50)
+    Output("Path: {0}".format(path))
+    Output("Compact: {0}".format(COMPACT_ON_SAVE))
+    Output("Workshared: {0}".format(doc.IsWorkshared))
+    
+    opts = SaveAsOptions()
+    opts.OverwriteExistingFile = True
+    opts.MaximumBackups = 1
+    opts.Compact = COMPACT_ON_SAVE
+    
+    if doc.IsWorkshared:
+        ws = WorksharingSaveAsOptions()
+        
+        try:
+            ws.SaveAsCentral = True
+            Output("  Using: SaveAsCentral (2024+ API)")
+        except:
+            try:
+                ws.MakeCentral = True
+                Output("  Using: MakeCentral (2022 API)")
+            except:
+                Output("  WARNING: Could not set central mode")
+        
+        opts.SetWorksharingOptions(ws)
+    
+    try:
+        Output("  Starting SaveAs...")
+        doc.SaveAs(path, opts)
+        
+        if System.IO.File.Exists(path):
+            size_mb = System.IO.FileInfo(path).Length / 1024.0 / 1024.0
+            Output("")
+            Output("=" * 50)
+            Output("SAVE SUCCESS!")
+            Output("=" * 50)
+            Output("  File: {0}".format(path))
+            Output("  Size: {0:.1f} MB".format(size_mb))
+            Output("=" * 50)
+        else:
+            Output("")
+            Output("WARNING: SaveAs executed but file not found!")
+            STATS.error("File not created after SaveAs")
+    
+    except Exception as e:
+        Output("")
+        Output("=" * 50)
+        Output("SAVE ERROR!")
+        Output("=" * 50)
+        Output("  Error: {0}".format(e))
+        STATS.error("SaveAs exception: {0}".format(e))
+        raise
+
+
+# ============================================================================
+# ЭКСПОРТ NWC
+# ============================================================================
+
+def export_nwc_via_revit(doc, output_folder):
+    if not HAS_NAVISWORKS_EXPORT:
+        Output("WARNING: NavisworksExportOptions not available")
+        return False
+    
+    if DRY_RUN:
+        Output("[DRY] NWC export via Revit API")
+        return True
+    
+    try:
+        file_name = None
+        if revitFilePath:
+            base_name = System.IO.Path.GetFileNameWithoutExtension(revitFilePath)
+            file_name = base_name + ".nwc"
+        else:
+            file_name = (doc.Title if doc and doc.Title else "Model") + ".nwc"
+        
+        nwc_folder = output_folder
+        if NWC_FOLDER and NWC_FOLDER.strip():
+            nwc_folder = NWC_FOLDER
+        
+        if not nwc_folder:
+            nwc_folder = OUTPUT_FOLDER if OUTPUT_FOLDER else System.IO.Path.GetDirectoryName(revitFilePath)
+        
+        ensure_dir(nwc_folder)
+        
+        view_3d = None
+        view_names_priority = ["Navisworks", "{3D} - Navisworks", "{3D}"]
+        
+        for vname in view_names_priority:
+            collector = FilteredElementCollector(doc).OfClass(View3D)
+            for v in collector:
+                if v.Name == vname and not v.IsTemplate:
+                    view_3d = v
+                    break
+            if view_3d:
+                break
+        
+        if not view_3d:
+            collector = FilteredElementCollector(doc).OfClass(View3D)
+            for v in collector:
+                if not v.IsTemplate:
+                    view_3d = v
+                    break
+        
+        if not view_3d:
+            Output("ERROR: No 3D view found for NWC export")
+            return False
+        
+        Output("NWC export view: {0}".format(view_3d.Name))
+        
+        nwc_options = NavisworksExportOptions()
+        
+        if NWC_COORDINATES == "shared":
+            nwc_options.Coordinates = NavisworksCoordinates.Shared
+        else:
+            nwc_options.Coordinates = NavisworksCoordinates.Internal
+        
+        nwc_options.ExportScope = NavisworksExportScope.View
+        nwc_options.ViewId = view_3d.Id
+        nwc_options.ExportLinks = NWC_CONVERT_LINKS
+        nwc_options.DivideFileIntoLevels = NWC_DIVIDE_BY_LEVEL
+        nwc_options.ExportElementIds = NWC_CONVERT_IDS
+        nwc_options.ExportRoomAsAttribute = False
+        nwc_options.ExportRoomGeometry = False
+        nwc_options.ConvertElementProperties = True
+        nwc_options.FindMissingMaterials = False
+        
+        nwc_path = System.IO.Path.Combine(nwc_folder, file_name)
+        Output("Exporting NWC: {0}".format(nwc_path))
+        
+        doc.Export(nwc_folder, file_name.Replace(".nwc", ""), nwc_options)
+        
+        if System.IO.File.Exists(nwc_path):
+            size_mb = System.IO.FileInfo(nwc_path).Length / 1024.0 / 1024.0
+            Output("NWC exported: {0:.1f} MB".format(size_mb))
+            return True
+        else:
+            Output("WARNING: NWC file not created")
+            return False
+    
+    except Exception as e:
+        Output("NWC export error: {0}".format(e))
+        return False
+
+
+# ============================================================================
+# MAIN
+# ============================================================================
 
 def main():
+    global DIALOG_SUPPRESSOR, WIN32_KILLER
+    
     try:
-        Output("Script started")
+        Output("")
+        Output("=" * 50)
+        Output("REVIT MODEL CLEANER v4.0")
+        Output("=" * 50)
+        
         if doc is None:
-            Output("Document handle is empty")
+            STATS.error("Document is None")
             return
-
-        Output("Current file: {0}".format(revitFilePath))
-
-        if DELETE_LINKS or DELETE_IMPORTS or DELETE_SHEETS:
-            t = Transaction(doc, "Remove links/imports/sheets")
-            try:
-                t.Start()
+        
+        revit_version = uiapp.Application.VersionNumber if uiapp and uiapp.Application else "Unknown"
+        Output("Revit Version: {0}".format(revit_version))
+        Output("Source: {0}".format(revitFilePath or "unknown"))
+        Output("Workshared: {0}".format("Yes" if doc.IsWorkshared else "No"))
+        Output("")
+        
+        # КРИТИЧНО: Запускаем все подавители диалогов
+        if SUPPRESS_DIALOGS:
+            Output("Starting dialog suppressors...")
+            
+            # 1. Win32 фоновый убийца диалогов
+            WIN32_KILLER = Win32DialogKiller()
+            WIN32_KILLER.start()
+            
+            # 2. Revit API подавитель
+            DIALOG_SUPPRESSOR = EnhancedDialogSuppressor(uiapp)
+            DIALOG_SUPPRESSOR.attach()
+            
+            Output("")
+        
+        # Фаза 1: Удаление
+        if DELETE_LINKS or DELETE_IMPORTS or DELETE_SHEETS or DELETE_VIEWS:
+            if not DRY_RUN:
+                t = Transaction(doc, "Clean model")
+                try:
+                    t.Start()
+                    
+                    if DELETE_LINKS:
+                        STATS.links = delete_links(doc)
+                    
+                    if DELETE_IMPORTS:
+                        STATS.imports = delete_imports(doc)
+                    
+                    if DELETE_SHEETS:
+                        STATS.sheets = delete_sheets(doc)
+                    
+                    if DELETE_VIEWS:
+                        STATS.views = delete_views(doc)
+                    
+                    t.Commit()
+                    
+                except Exception as ex:
+                    if t.HasStarted():
+                        t.RollBack()
+                    STATS.error("Delete failed: {0}".format(ex))
+                    raise
+            else:
                 if DELETE_LINKS:
-                    delete_revit_links(doc)
+                    STATS.links = delete_links(doc)
                 if DELETE_IMPORTS:
-                    delete_imported_content(doc)
+                    STATS.imports = delete_imports(doc)
                 if DELETE_SHEETS:
-                    delete_sheets(doc)
-                t.Commit()
-            except Exception:
-                if t.HasStarted():
-                    t.RollBack()
-                raise
-
+                    STATS.sheets = delete_sheets(doc)
+                if DELETE_VIEWS:
+                    STATS.views = delete_views(doc)
+        
+        # Фаза 2: Очистка
         if PURGE_UNUSED:
-            purge_unused_families(doc)
-
-        target_folder = _get_target_folder()
-        _ensure_directory(target_folder)
-        target_path = _build_target_path(target_folder)
-        Output("Saving model to: {0}".format(target_path))
-        _save_as_central(target_path)
-
-        Output("Script finished successfully")
+            STATS.purged = purge_unused(doc)
+        
+        # Фаза 3: Экспорт NWC
+        if EXPORT_NWC and not DRY_RUN:
+            Output("")
+            Output("=" * 50)
+            Output("EXPORTING NWC")
+            Output("=" * 50)
+            export_nwc_via_revit(doc, get_output_folder())
+        
+        # Фаза 4: Сохранение
+        folder = get_output_folder()
+        ensure_dir(folder)
+        path = get_output_path(folder)
+        
+        save_model(doc, path)
+        
+        # Отчет
+        STATS.summary()
+        
+        # Статистика подавления
+        if DIALOG_SUPPRESSOR:
+            summary = DIALOG_SUPPRESSOR.get_summary()
+            Output("")
+            Output("Revit dialogs suppressed: {0}".format(summary["count"]))
+            if summary["dialogs"]:
+                Output("Dialog types: {0}".format(", ".join(summary["dialogs"][:5])))
+        
+        if WIN32_KILLER:
+            Output("Win32 dialogs closed: {0}".format(WIN32_KILLER.get_closed_count()))
+        
+        Output("")
+        Output("DONE")
+    
     except Exception as e:
-        Output("Script error: {0}".format(e))
+        STATS.error("Fatal: {0}".format(e))
+        STATS.summary()
+        Output("")
+        Output("FAILED")
+        raise
+    
+    finally:
+        # КРИТИЧНО: Останавливаем все подавители
+        if WIN32_KILLER:
+            WIN32_KILLER.stop()
+        
+        if DIALOG_SUPPRESSOR:
+            DIALOG_SUPPRESSOR.detach()
 
 
+# Запуск
 main()
