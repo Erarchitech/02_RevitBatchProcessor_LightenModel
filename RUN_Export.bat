@@ -145,15 +145,7 @@ set "AUTO_CLOSE_TIMEOUT=300"
 :: ============================================================================
 :: ЗАПУСК (не менять)
 :: ============================================================================
-powershell -NoProfile -Command ^
-    "$sig = '[DllImport(\"kernel32.dll\", SetLastError = true)] public static extern IntPtr GetStdHandle(int nStdHandle);' + ^
-    '[DllImport(\"kernel32.dll\", SetLastError = true)] public static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);' + ^
-    '[DllImport(\"kernel32.dll\", SetLastError = true)] public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);'; ^
-    $t = Add-Type -MemberDefinition $sig -Name WinAPI -Namespace Console -PassThru; ^
-    $h = $t::GetStdHandle(-10); ^
-    $m = 0; ^
-    $null = $t::GetConsoleMode($h, [ref]$m); ^
-    $null = $t::SetConsoleMode($h, $m -band (-bnot 0x0040))" >nul 2>&1
+powershell -NoProfile -Command "$sig='[DllImport(\"kernel32.dll\", SetLastError = true)] public static extern IntPtr GetStdHandle(int nStdHandle);'; $sig+='[DllImport(\"kernel32.dll\", SetLastError = true)] public static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);'; $sig+='[DllImport(\"kernel32.dll\", SetLastError = true)] public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);'; $t=Add-Type -MemberDefinition $sig -Name WinAPI -Namespace Console -PassThru; $h=$t::GetStdHandle(-10); $m=0; $null=$t::GetConsoleMode($h,[ref]$m); $null=$t::SetConsoleMode($h, $m -band (-bnot 0x0040))" >nul 2>&1
 
 echo.
 echo ================================================================

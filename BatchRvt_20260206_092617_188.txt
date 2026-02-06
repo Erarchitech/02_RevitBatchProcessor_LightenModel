@@ -1,0 +1,267 @@
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : Session ID: <2026-02-06T06:26:17.188Z>
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : Log File:
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : 	C:\Users\e.ermolenko\Documents\ТЕСТИРОВАНИЕ\Grebnoy kanal1\Scripts\Logs\BatchRvt_20260206_092617_188.log
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : Using specific Revit version: 2022
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : Task Script:
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : 	\\srv-dfs\BIM\01_Ресурсы плагинов\10_Облегченные модели\Версия_BAT_3\clean_model.py
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : Revit Processing mode:
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : 	Batch Revit File processing
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : Central File Processing mode:
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : 	Detach from Central
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : 	Worksets Configuration: Close All
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : 	Revit files will be audited on opening.
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : Reading Revit File list:
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : 	C:\Users\e.ermolenko\AppData\Local\Temp\batchrvt_list_93838d7d417c4f4d915c2ba648365a4a.txt
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : Revit Files for processing (2):
+06.02.2026 09:26:17 : 
+	C:\Users\e.ermolenko\Documents\ТЕСТИРОВАНИЕ\Grebnoy kanal1\CDE\rvt_ex\GRKN1_К2.2_PD_KR.rvt
+	File exists: YES
+	File size: 216,05MB
+	Revit version: NOT DETECTED!
+
+	C:\Users\e.ermolenko\Documents\ТЕСТИРОВАНИЕ\Grebnoy kanal1\CDE\rvt_ex\GRKN1_К1_PD_KR.rvt
+	File exists: YES
+	File size: 271,64MB
+	Revit version: NOT DETECTED!
+
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : Starting batch operation...
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : Processing Revit files (1 to 2 of 2) in Revit 2022 session.
+06.02.2026 09:26:17 : 
+	C:\Users\e.ermolenko\Documents\ТЕСТИРОВАНИЕ\Grebnoy kanal1\CDE\rvt_ex\GRKN1_К2.2_PD_KR.rvt
+	File exists: YES
+	File size: 216,05MB
+	Revit version: NOT DETECTED!
+
+	C:\Users\e.ermolenko\Documents\ТЕСТИРОВАНИЕ\Grebnoy kanal1\CDE\rvt_ex\GRKN1_К1_PD_KR.rvt
+	File exists: YES
+	File size: 271,64MB
+	Revit version: NOT DETECTED!
+
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : Starting Revit 2022 session...
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:17 : Monitoring host Revit process (PID: 55484)
+06.02.2026 09:26:17 : 
+06.02.2026 09:26:43 : 	- 
+06.02.2026 09:26:43 : 	- Processing file (1 of 2): C:\Users\e.ermolenko\Documents\ТЕСТИРОВАНИЕ\Grebnoy kanal1\CDE\rvt_ex\GRKN1_К2.2_PD_KR.rvt
+06.02.2026 09:26:43 : 	- 
+06.02.2026 09:26:43 : 	- WARNING: the file being processed appears to be a Workshared Local file!
+06.02.2026 09:26:43 : 	- 
+06.02.2026 09:26:43 : 	- Opening detached instance of central file: C:\Users\e.ermolenko\Documents\ТЕСТИРОВАНИЕ\Grebnoy kanal1\CDE\rvt_ex\GRKN1_К2.2_PD_KR.rvt
+06.02.2026 09:26:59 : 
+06.02.2026 09:26:59 : Revit process appears to be busy or unresponsive...
+06.02.2026 09:26:59 : 
+06.02.2026 09:29:19 : 
+06.02.2026 09:29:19 : Revit process appeared busy or unresponsive for about 150 seconds.
+06.02.2026 09:29:19 : 
+06.02.2026 09:29:47 : 	- 
+06.02.2026 09:29:47 : 	- Task script operation started.
+06.02.2026 09:29:47 : 	- CONFIG: C:\Users\EAA8C~1.ERM\AppData\Local\Temp\clean_config_522ded7784f94037be1dd733a6b2eea3.json
+06.02.2026 09:29:47 : 	- 
+06.02.2026 09:29:47 : 	- ==================================================
+06.02.2026 09:29:47 : 	- REVIT MODEL CLEANER v4.0
+06.02.2026 09:29:47 : 	- ==================================================
+06.02.2026 09:29:47 : 	- Revit Version: 2022
+06.02.2026 09:29:47 : 	- Source: C:\Users\e.ermolenko\Documents\ТЕСТИРОВАНИЕ\Grebnoy kanal1\CDE\rvt_ex\GRKN1_К2.2_PD_KR.rvt
+06.02.2026 09:29:47 : 	- Workshared: Yes
+06.02.2026 09:29:47 : 	- 
+06.02.2026 09:29:47 : 	- Starting dialog suppressors...
+06.02.2026 09:29:47 : 	- Win32 dialog killer: NOT AVAILABLE
+06.02.2026 09:29:47 : 	-   DialogBoxShowing: attached
+06.02.2026 09:29:47 : 	-   FailuresProcessing: attached
+06.02.2026 09:29:47 : 	-   DocumentOpening: attached
+06.02.2026 09:29:47 : 	- Enhanced dialog suppressor: ATTACHED
+06.02.2026 09:29:47 : 	- 
+06.02.2026 09:29:47 : 	- Link instances: 2
+06.02.2026 09:29:47 : 	- Link types: 2
+06.02.2026 09:29:47 : 	- Images: 56
+06.02.2026 09:29:47 : 	- Imports: none
+06.02.2026 09:29:47 : 	- Sheets: 70
+06.02.2026 09:29:56 : 
+06.02.2026 09:29:56 : Revit process appears to be busy or unresponsive...
+06.02.2026 09:29:56 : 
+06.02.2026 09:30:02 : 	- ERROR: Delete failed: The referenced object is not valid, possibly because it has been deleted from the database, or its creation was undone.
+06.02.2026 09:30:02 : 	- ERROR: Fatal: The referenced object is not valid, possibly because it has been deleted from the database, or its creation was undone.
+06.02.2026 09:30:02 : 	- 
+06.02.2026 09:30:02 : 	- ==================================================
+06.02.2026 09:30:02 : 	- SUMMARY
+06.02.2026 09:30:02 : 	- ==================================================
+06.02.2026 09:30:02 : 	- Links: 60
+06.02.2026 09:30:02 : 	- Imports: 0
+06.02.2026 09:30:02 : 	- Sheets: 70
+06.02.2026 09:30:02 : 	- Views: 0
+06.02.2026 09:30:02 : 	- Purged: 0
+06.02.2026 09:30:02 : 	- Errors: 2
+06.02.2026 09:30:02 : 	- Time: 16.6s
+06.02.2026 09:30:02 : 	- ==================================================
+06.02.2026 09:30:02 : 	- 
+06.02.2026 09:30:02 : 	- FAILED
+06.02.2026 09:30:02 : 	- Win32 dialog killer: STOPPED (closed: 0)
+06.02.2026 09:30:02 : 	- Enhanced dialog suppressor: DETACHED
+06.02.2026 09:30:02 : 	- 
+06.02.2026 09:30:02 : 	- ERROR: An error occurred while executing the task script! Operation aborted.
+06.02.2026 09:30:02 : 	- 
+06.02.2026 09:30:02 : 	- Exception: [Exception] The referenced object is not valid, possibly because it has been deleted from the database, or its creation was undone.
+06.02.2026 09:30:02 : 	- .NET exception: [InvalidObjectException] The referenced object is not valid, possibly because it has been deleted from the database, or its creation was undone.
+06.02.2026 09:30:02 : 	- 
+06.02.2026 09:30:02 : 	- Further exception information:
+06.02.2026 09:30:02 : 	- 
+06.02.2026 09:30:02 : 	- 	delete_views$187: 576: clear
+06.02.2026 09:30:02 : 	- 	main$176: 861: [1196-1196] '\\srv-dfs\BIM\01_Ресурсы плагинов\10_Облегченные модели\Версия_BAT_3\clean_model.py'
+06.02.2026 09:30:02 : 	- 	<unnamed>: 2448: [1268-1268] '\\srv-dfs\BIM\01_Ресурсы плагинов\10_Облегченные модели\Версия_BAT_3\clean_model.py'
+06.02.2026 09:30:02 : 	- 	ExecuteScript$113: 57: [82-82] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\script_util.py'
+06.02.2026 09:30:02 : 	- 	executeTaskScript$110: 155: [217-217] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:30:02 : 	- 	WithErrorHandling$25: 89: [49-49] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\script_host_error.py'
+06.02.2026 09:30:02 : 	- 	processDocument$108: 76: [227-232] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:30:02 : 	- 	WithOpenedDetachedDocument$100: 261: [238-238] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:30:02 : 	- 	revitAction$98: 55: [315-324] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:30:03 : 	- 	WithDocumentOpeningErrorReporting$97: 61: [377-377] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:30:03 : 	- 	action$96: 37: [370-370] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:30:03 : 	- 	WithDialogBoxShowingHandler$95: 103: [88-88] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_dialog_util.py'
+06.02.2026 09:30:03 : 	- 	action$94: 38: [391-391] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:30:03 : 	- 	WithFailuresProcessingHandler$92: 118: [176-176] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_failure_handling.py'
+06.02.2026 09:30:03 : 	- 	action$91: 49: [393-393] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:30:03 : 	- 	WithExceptionLogging$90: 66: [165-165] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:30:03 : 	- 	WithAutomatedErrorHandling$89: 66: [395-395] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:30:03 : 	- 	WithErrorReportingAndHandling$88: 66: [372-372] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:30:03 : 	- 	RunDetachedDocumentAction$87: 114: [326-326] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:30:03 : 	- 	RunBatchTaskScript$63: 1906: [276-285] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:30:03 : 	- 	<lambda$3>$62: 30: [387-387] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:30:03 : 	- 	WithErrorHandling$25: 89: [49-49] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\script_host_error.py'
+06.02.2026 09:30:03 : 	- 	DoRevitSessionProcessing$46: 316: [386-391] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:30:03 : 	- 	<lambda$4>$45: 36: [422-428] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:30:03 : 	- 	WithErrorHandling$25: 89: [49-49] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\script_host_error.py'
+06.02.2026 09:30:03 : 	- 	outputStreamWriterAction$42: 66: [421-432] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:30:03 : 	- 	UsingStream$39: 61: [84-84] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\stream_io_util.py'
+06.02.2026 09:30:03 : 	- 	outputStreamAction$40: 73: [435-435] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:30:03 : 	- 	UsingStream$39: 61: [84-84] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\stream_io_util.py'
+06.02.2026 09:30:03 : 	- 	Main$26: 205: [438-438] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:30:03 : 	- 	WithErrorHandling$25: 89: [49-49] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\script_host_error.py'
+06.02.2026 09:30:03 : 	- 	<unnamed>: 549: [450-454] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:30:03 : 	- 
+06.02.2026 09:30:03 : 	- Closed detached instance of central file: C:\Users\e.ermolenko\Documents\ТЕСТИРОВАНИЕ\Grebnoy kanal1\CDE\rvt_ex\GRKN1_К2.2_PD_KR.rvt
+06.02.2026 09:30:03 : 	- 
+06.02.2026 09:30:03 : 	- Operation completed.
+06.02.2026 09:30:03 : 	- 
+06.02.2026 09:30:04 : 	- Processing file (2 of 2): C:\Users\e.ermolenko\Documents\ТЕСТИРОВАНИЕ\Grebnoy kanal1\CDE\rvt_ex\GRKN1_К1_PD_KR.rvt
+06.02.2026 09:30:04 : 	- 
+06.02.2026 09:30:04 : 	- WARNING: the file being processed appears to be a Workshared Local file!
+06.02.2026 09:30:04 : 	- 
+06.02.2026 09:30:04 : 	- Opening detached instance of central file: C:\Users\e.ermolenko\Documents\ТЕСТИРОВАНИЕ\Grebnoy kanal1\CDE\rvt_ex\GRKN1_К1_PD_KR.rvt
+06.02.2026 09:30:27 : 
+06.02.2026 09:30:27 : Revit process appeared busy or unresponsive for about 40 seconds.
+06.02.2026 09:30:27 : 
+06.02.2026 09:30:57 : 	- 
+06.02.2026 09:30:57 : 	- Task script operation started.
+06.02.2026 09:30:57 : 	- CONFIG: C:\Users\EAA8C~1.ERM\AppData\Local\Temp\clean_config_522ded7784f94037be1dd733a6b2eea3.json
+06.02.2026 09:30:57 : 	- 
+06.02.2026 09:30:57 : 	- ==================================================
+06.02.2026 09:30:57 : 	- REVIT MODEL CLEANER v4.0
+06.02.2026 09:30:57 : 	- ==================================================
+06.02.2026 09:30:57 : 	- Revit Version: 2022
+06.02.2026 09:30:57 : 	- Source: C:\Users\e.ermolenko\Documents\ТЕСТИРОВАНИЕ\Grebnoy kanal1\CDE\rvt_ex\GRKN1_К1_PD_KR.rvt
+06.02.2026 09:30:57 : 	- Workshared: Yes
+06.02.2026 09:30:57 : 	- 
+06.02.2026 09:30:57 : 	- Starting dialog suppressors...
+06.02.2026 09:30:57 : 	- Win32 dialog killer: NOT AVAILABLE
+06.02.2026 09:30:57 : 	-   DialogBoxShowing: attached
+06.02.2026 09:30:57 : 	-   FailuresProcessing: attached
+06.02.2026 09:30:57 : 	-   DocumentOpening: attached
+06.02.2026 09:30:57 : 	- Enhanced dialog suppressor: ATTACHED
+06.02.2026 09:30:57 : 	- 
+06.02.2026 09:30:57 : 	- Link instances: 3
+06.02.2026 09:30:57 : 	- Link types: 3
+06.02.2026 09:30:57 : 	- Images: 58
+06.02.2026 09:30:57 : 	- CAD instances: 2
+06.02.2026 09:30:57 : 	- CAD types: 2
+06.02.2026 09:30:57 : 	- Sheets: 60
+06.02.2026 09:31:07 : 
+06.02.2026 09:31:07 : Revit process appears to be busy or unresponsive...
+06.02.2026 09:31:07 : 
+06.02.2026 09:31:10 : 	- ERROR: Delete failed: The referenced object is not valid, possibly because it has been deleted from the database, or its creation was undone.
+06.02.2026 09:31:10 : 	- ERROR: Fatal: The referenced object is not valid, possibly because it has been deleted from the database, or its creation was undone.
+06.02.2026 09:31:10 : 	- 
+06.02.2026 09:31:10 : 	- ==================================================
+06.02.2026 09:31:10 : 	- SUMMARY
+06.02.2026 09:31:10 : 	- ==================================================
+06.02.2026 09:31:10 : 	- Links: 64
+06.02.2026 09:31:10 : 	- Imports: 4
+06.02.2026 09:31:10 : 	- Sheets: 60
+06.02.2026 09:31:10 : 	- Views: 0
+06.02.2026 09:31:10 : 	- Purged: 0
+06.02.2026 09:31:10 : 	- Errors: 2
+06.02.2026 09:31:10 : 	- Time: 18.1s
+06.02.2026 09:31:10 : 	- ==================================================
+06.02.2026 09:31:10 : 	- 
+06.02.2026 09:31:10 : 	- FAILED
+06.02.2026 09:31:10 : 	- Win32 dialog killer: STOPPED (closed: 0)
+06.02.2026 09:31:10 : 	- Enhanced dialog suppressor: DETACHED
+06.02.2026 09:31:10 : 	- 
+06.02.2026 09:31:10 : 	- ERROR: An error occurred while executing the task script! Operation aborted.
+06.02.2026 09:31:10 : 	- 
+06.02.2026 09:31:10 : 	- Exception: [Exception] The referenced object is not valid, possibly because it has been deleted from the database, or its creation was undone.
+06.02.2026 09:31:10 : 	- .NET exception: [InvalidObjectException] The referenced object is not valid, possibly because it has been deleted from the database, or its creation was undone.
+06.02.2026 09:31:10 : 	- 
+06.02.2026 09:31:10 : 	- Further exception information:
+06.02.2026 09:31:10 : 	- 
+06.02.2026 09:31:10 : 	- 	delete_views$213: 576: clear
+06.02.2026 09:31:11 : 	- 	main$202: 861: [1196-1196] '\\srv-dfs\BIM\01_Ресурсы плагинов\10_Облегченные модели\Версия_BAT_3\clean_model.py'
+06.02.2026 09:31:11 : 	- 	<unnamed>: 2448: [1268-1268] '\\srv-dfs\BIM\01_Ресурсы плагинов\10_Облегченные модели\Версия_BAT_3\clean_model.py'
+06.02.2026 09:31:11 : 	- 	ExecuteScript$113: 57: [82-82] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\script_util.py'
+06.02.2026 09:31:11 : 	- 	executeTaskScript$110: 155: [217-217] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:31:11 : 	- 	WithErrorHandling$25: 89: [49-49] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\script_host_error.py'
+06.02.2026 09:31:11 : 	- 	processDocument$108: 76: [227-232] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:31:11 : 	- 	WithOpenedDetachedDocument$100: 261: [238-238] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:31:11 : 	- 	revitAction$98: 55: [315-324] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:31:11 : 	- 	WithDocumentOpeningErrorReporting$97: 61: [377-377] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:31:11 : 	- 	action$96: 37: [370-370] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:31:11 : 	- 	WithDialogBoxShowingHandler$95: 103: [88-88] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_dialog_util.py'
+06.02.2026 09:31:11 : 	- 	action$94: 38: [391-391] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:31:11 : 	- 	WithFailuresProcessingHandler$92: 118: [176-176] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_failure_handling.py'
+06.02.2026 09:31:11 : 	- 	action$91: 49: [393-393] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:31:11 : 	- 	WithExceptionLogging$90: 66: [165-165] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:31:11 : 	- 	WithAutomatedErrorHandling$89: 66: [395-395] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:31:11 : 	- 	WithErrorReportingAndHandling$88: 66: [372-372] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:31:11 : 	- 	RunDetachedDocumentAction$87: 114: [326-326] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_util.py'
+06.02.2026 09:31:11 : 	- 	RunBatchTaskScript$63: 1906: [276-285] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:31:11 : 	- 	<lambda$3>$62: 30: [387-387] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:31:11 : 	- 	WithErrorHandling$25: 89: [49-49] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\script_host_error.py'
+06.02.2026 09:31:11 : 	- 	DoRevitSessionProcessing$46: 316: [386-391] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:31:11 : 	- 	<lambda$4>$45: 36: [422-428] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:31:11 : 	- 	WithErrorHandling$25: 89: [49-49] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\script_host_error.py'
+06.02.2026 09:31:11 : 
+06.02.2026 09:31:11 : Revit process appeared busy or unresponsive for about 14 seconds.
+06.02.2026 09:31:11 : 
+06.02.2026 09:31:11 : 	- 	outputStreamWriterAction$42: 66: [421-432] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:31:11 : 	- 	UsingStream$39: 61: [84-84] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\stream_io_util.py'
+06.02.2026 09:31:11 : 	- 	outputStreamAction$40: 73: [435-435] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:31:11 : 	- 	UsingStream$39: 61: [84-84] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\stream_io_util.py'
+06.02.2026 09:31:11 : 	- 	Main$26: 205: [438-438] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:31:11 : 	- 	WithErrorHandling$25: 89: [49-49] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\script_host_error.py'
+06.02.2026 09:31:11 : 	- 	<unnamed>: 549: [450-454] 'C:\Users\e.ermolenko\AppData\Local\RevitBatchProcessor\Scripts\revit_script_host.py'
+06.02.2026 09:31:11 : 	- 
+06.02.2026 09:31:11 : 	- Closed detached instance of central file: C:\Users\e.ermolenko\Documents\ТЕСТИРОВАНИЕ\Grebnoy kanal1\CDE\rvt_ex\GRKN1_К1_PD_KR.rvt
+06.02.2026 09:31:11 : 	- 
+06.02.2026 09:31:11 : 	- Operation completed.
+06.02.2026 09:31:21 : 
+06.02.2026 09:31:21 : Revit process (PID: 55484) has exited!
+06.02.2026 09:31:21 : 
+06.02.2026 09:31:21 : Operation completed.

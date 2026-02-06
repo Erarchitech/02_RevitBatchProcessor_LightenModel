@@ -808,7 +808,7 @@ def delete_views(doc):
     except:
         return 0
     
-    to_delete = []
+    to_delete_ids = []
     kept = 0
     
     for v in views:
@@ -832,20 +832,32 @@ def delete_views(doc):
         if keep:
             kept += 1
         else:
-            to_delete.append(v)
+            try:
+                to_delete_ids.append(v.Id)
+            except:
+                pass
     
-    if not to_delete:
+    if not to_delete_ids:
         return 0
     
     if DRY_RUN:
-        Output("[DRY] Views: {0} (keep {1})".format(len(to_delete), kept))
-        return len(to_delete)
+        Output("[DRY] Views: {0} (keep {1})".format(len(to_delete_ids), kept))
+        return len(to_delete_ids)
     
     deleted = 0
-    for v in to_delete:
-        if safe_delete(doc, v.Id) > 0:
-            deleted += 1
+    failed = 0
+    for eid in to_delete_ids:
+        try:
+            if safe_delete(doc, eid) > 0:
+                deleted += 1
+            else:
+                failed += 1
+        except Exception as ex:
+            failed += 1
+            Output("WARNING: View delete failed: {0}".format(ex))
     
+    if failed:
+        Output("Views failed: {0}".format(failed))
     Output("Views: {0} (kept {1})".format(deleted, kept))
     return deleted
 
